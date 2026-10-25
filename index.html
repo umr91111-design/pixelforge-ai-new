@@ -83,10 +83,79 @@ a{color:var(--cyan)}
 </section>
 
 <section class="card">
+
 <h2>✒️ Image to SVG</h2>
-<p>Trace a raster image into vector paths using VTracer when its processing service is configured.</p>
-<p class="small">SVG tracing is not enabled in this starter version.</p>
+<p>Convert PNG, JPG, or WebP images into SVG vector files using VTracer.</p>
+
+<input type="file" id="svgImageInput" accept="image/png,image/jpeg,image/webp">
+<button type="button" id="svgConvertButton">Convert to SVG</button>
+<p id="svgStatus" class="small" aria-live="polite"></p>
+<a id="svgDownloadLink" hidden download="pixelforge.svg">Download SVG</a>
+
+<script>
+(() => {
+  const input = document.getElementById("svgImageInput");
+  const button = document.getElementById("svgConvertButton");
+  const status = document.getElementById("svgStatus");
+  const download = document.getElementById("svgDownloadLink");
+  let previousUrl = null;
+
+  button.addEventListener("click", async () => {
+    const file = input.files[0];
+
+    if (!file) {
+      status.textContent = "Please choose an image first.";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      status.textContent = "Please choose an image smaller than 5 MB.";
+      return;
+    }
+
+    button.disabled = true;
+    download.hidden = true;
+    status.textContent = "Converting image... Please wait.";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        "https://pixelforge-api.onrender.com/api/trace",
+        { method: "POST", body: formData }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || "Conversion failed.");
+      }
+
+      const svgText = await response.text();
+
+      if (!svgText.includes("<svg")) {
+        throw new Error("The server returned an invalid SVG.");
+      }
+
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+
+      previousUrl = URL.createObjectURL(
+        new Blob([svgText], { type: "image/svg+xml" })
+      );
+
+      download.href = previousUrl;
+      download.hidden = false;
+      status.textContent = "Conversion complete! Your SVG is ready.";
+    } catch (error) {
+      status.textContent = error.message || "Something went wrong. Please try again.";
+    } finally {
+      button.disabled = false;
+    }
+  });
+})();
+</script>
 </section>
+
 
 <section class="card">
 <h2>✨ AI image upscaler</h2>
