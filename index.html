@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>PixelForge AI — Free Image Tools</title>
-<meta name="description" content="Free online image converter, resizer, SVG converter and image tools.">
+<meta name="description" content="Free online image converter, resizer, SVG to PNG converter and image tools.">
 
 <style>
 :root {
@@ -34,6 +34,7 @@ header {
   align-items: center;
   border-bottom: 1px solid var(--line);
   gap: 12px;
+  flex-wrap: wrap;
 }
 .logo { font-size: 21px; font-weight: 850; letter-spacing: -.7px; }
 .logo span { color: var(--cyan); }
@@ -103,6 +104,13 @@ label {
   color: #d5def2;
   margin-top: 10px;
 }
+input[type=checkbox] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
 button, .download {
   border: 0;
   border-radius: 10px;
@@ -156,7 +164,7 @@ a { color: var(--cyan); }
   <h2>🖼️ Image Converter</h2>
   <p>Convert JPG, PNG and WebP images into another format.</p>
   <label class="upload">Choose an image
-    <input id="convertFile" type="file" accept="image/*">
+    <input id="convertFile" type="file" accept="image/png,image/jpeg,image/webp">
   </label>
   <label for="format">Output format</label>
   <select id="format">
@@ -177,9 +185,9 @@ a { color: var(--cyan); }
     <input id="resizeFile" type="file" accept="image/*">
   </label>
   <label for="width">Width (pixels)</label>
-  <input id="width" type="number" min="1" max="12000" value="800">
+  <input id="width" type="number" min="1" max="10000" value="800">
   <label for="height">Height (pixels)</label>
-  <input id="height" type="number" min="1" max="12000" value="800">
+  <input id="height" type="number" min="1" max="10000" value="800">
   <label><input id="keepRatio" type="checkbox" checked> Keep original proportions</label>
   <button class="action" id="resizeBtn">Resize Image</button>
   <div class="status" id="resizeStatus" aria-live="polite"></div>
@@ -189,21 +197,25 @@ a { color: var(--cyan); }
 <!-- SVG TO PNG -->
 <section class="card">
   <h2>🎨 SVG to PNG</h2>
-  <p>Convert SVG vector files into downloadable PNG images with a transparent background when supported.</p>
+  <p>Convert SVG vector files into high-resolution PNG images.</p>
   <label class="upload">Choose an SVG file
     <input id="svgToPngFile" type="file" accept=".svg,image/svg+xml">
   </label>
-  <label for="svgPngWidth">Output width (pixels)</label>
-  <input id="svgPngWidth" type="number" min="1" max="12000" value="1024">
+  <label for="svgPngWidth">Width (pixels)</label>
+  <input id="svgPngWidth" type="number" min="1" max="10000" value="1024">
+  <label for="svgPngHeight">Height (pixels)</label>
+  <input id="svgPngHeight" type="number" min="1" max="10000" value="1024">
+  <label><input id="svgPngKeepRatio" type="checkbox" checked> Keep original proportions</label>
+  <p class="small">Maximum width and height: 10,000 pixels each. Very large images may exceed your device's memory.</p>
   <button class="action" id="svgToPngButton">Convert to PNG</button>
   <div class="status" id="svgToPngStatus" aria-live="polite"></div>
   <a class="download" id="svgToPngDownload" hidden download="pixelforge.png">Download PNG</a>
 </section>
 
-<!-- BACKGROUND REMOVER PLACEHOLDER -->
+<!-- BACKGROUND REMOVER -->
 <section class="card">
   <h2>✂️ Background Remover</h2>
-  <p>AI background removal requires an image-processing model or service.</p>
+  <p>Check your connection to the PixelForge API. Background removal is not enabled yet.</p>
   <button class="action" id="backendBtn">Check Backend Connection</button>
   <div class="status" id="backendStatus" aria-live="polite">Backend connection not checked yet.</div>
 </section>
@@ -216,11 +228,11 @@ a { color: var(--cyan); }
     <input type="file" id="svgImageInput" accept="image/png,image/jpeg,image/webp">
   </label>
   <button type="button" class="action" id="svgConvertButton">Convert to SVG</button>
-  <p id="svgStatus" class="small" aria-live="polite"></p>
+  <div id="svgStatus" class="status" aria-live="polite"></div>
   <a class="download" id="svgDownloadLink" hidden download="pixelforge.svg">Download SVG</a>
 </section>
 
-<!-- UPSCALER PLACEHOLDER -->
+<!-- UPSCALER -->
 <section class="card">
   <h2>✨ AI Image Upscaler</h2>
   <p>AI enlargement requires a dedicated image-processing model or API.</p>
@@ -241,12 +253,20 @@ a { color: var(--cyan); }
 <script>
 "use strict";
 
+const MAX_DIMENSION = 10000;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
 /* Shared image-loading helper */
 function getImage(file) {
   return new Promise((resolve, reject) => {
-    if (!file) return reject(new Error("Please choose an image first."));
+    if (!file) {
+      reject(new Error("Please choose an image first."));
+      return;
+    }
+
     if (!file.type.startsWith("image/")) {
-      return reject(new Error("Please select a valid image file."));
+      reject(new Error("Please select a valid image file."));
+      return;
     }
 
     const url = URL.createObjectURL(file);
@@ -261,6 +281,19 @@ function getImage(file) {
   });
 }
 
+/* Release an old download URL */
+function setDownload(link, blob, filename) {
+  if (link.dataset.url) {
+    URL.revokeObjectURL(link.dataset.url);
+  }
+
+  const url = URL.createObjectURL(blob);
+  link.dataset.url = url;
+  link.href = url;
+  link.download = filename;
+  link.hidden = false;
+}
+
 /* Canvas download helper */
 function saveCanvas(canvas, type, link, status) {
   const mime = ["image/jpeg", "image/webp"].includes(type)
@@ -269,18 +302,17 @@ function saveCanvas(canvas, type, link, status) {
 
   canvas.toBlob(blob => {
     if (!blob) {
-      status.textContent = "Could not convert this image.";
+      status.textContent = "Could not convert this image. Try smaller dimensions.";
       return;
     }
 
-    if (link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+    const extension = {
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+      "image/png": "png"
+    }[mime];
 
-    const url = URL.createObjectURL(blob);
-    link.dataset.url = url;
-    link.href = url;
-    link.download = "pixelforge-image." +
-      ({ "image/jpeg": "jpg", "image/webp": "webp" }[mime] || "png");
-    link.hidden = false;
+    setDownload(link, blob, "pixelforge-image." + extension);
     status.textContent = "Finished! Tap the download link.";
   }, mime, 0.92);
 }
@@ -290,25 +322,34 @@ document.getElementById("convertBtn").addEventListener("click", async () => {
   const status = document.getElementById("convertStatus");
   const link = document.getElementById("convertDownload");
   const button = document.getElementById("convertBtn");
+  let url;
 
   link.hidden = true;
   button.disabled = true;
   status.textContent = "Processing...";
 
-  let url;
   try {
     const file = document.getElementById("convertFile").files[0];
-    const { img, url: imageUrl } = await getImage(file);
-    url = imageUrl;
+    if (file && file.size > MAX_FILE_SIZE) {
+      throw new Error("Please choose an image smaller than 5 MB.");
+    }
+
+    const result = await getImage(file);
+    const img = result.img;
+    url = result.url;
 
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    canvas.getContext("2d").drawImage(img, 0, 0);
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas is unavailable.");
+
+    context.drawImage(img, 0, 0);
 
     saveCanvas(canvas, document.getElementById("format").value, link, status);
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = error.message || "Conversion failed.";
   } finally {
     if (url) URL.revokeObjectURL(url);
     button.disabled = false;
@@ -320,48 +361,65 @@ document.getElementById("resizeBtn").addEventListener("click", async () => {
   const status = document.getElementById("resizeStatus");
   const link = document.getElementById("resizeDownload");
   const button = document.getElementById("resizeBtn");
+  let url;
 
   link.hidden = true;
   button.disabled = true;
   status.textContent = "Processing...";
 
-  let url;
   try {
     const file = document.getElementById("resizeFile").files[0];
-    const { img, url: imageUrl } = await getImage(file);
-    url = imageUrl;
+    if (file && file.size > MAX_FILE_SIZE) {
+      throw new Error("Please choose an image smaller than 5 MB.");
+    }
+
+    const result = await getImage(file);
+    const img = result.img;
+    url = result.url;
 
     let w = Number(document.getElementById("width").value);
     let h = Number(document.getElementById("height").value);
 
     if (!Number.isInteger(w) || !Number.isInteger(h) ||
-        w < 1 || h < 1 || w > 12000 || h > 12000) {
-      throw new Error("Enter dimensions between 1 and 12000 pixels.");
+        w < 1 || h < 1 || w > MAX_DIMENSION || h > MAX_DIMENSION) {
+      throw new Error("Enter width and height between 1 and 10000 pixels.");
     }
 
     if (document.getElementById("keepRatio").checked) {
       const ratio = img.naturalWidth / img.naturalHeight;
-      if (w / h > ratio) w = Math.round(h * ratio);
-      else h = Math.round(w / ratio);
+      h = Math.round(w / ratio);
+
+      if (h > MAX_DIMENSION) {
+        h = MAX_DIMENSION;
+        w = Math.max(1, Math.round(h * ratio));
+      }
 
       document.getElementById("width").value = w;
       document.getElementById("height").value = h;
     }
 
+    if (w * h > 40000000) {
+      throw new Error("This image is too large for reliable browser processing. Try smaller dimensions.");
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas is unavailable.");
+
+    context.drawImage(img, 0, 0, w, h);
     saveCanvas(canvas, "image/png", link, status);
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = error.message || "Resizing failed.";
   } finally {
     if (url) URL.revokeObjectURL(url);
     button.disabled = false;
   }
 });
 
-/* KEEP IMAGE PROPORTIONS */
+/* UPDATE RESIZER HEIGHT WHEN KEEPING PROPORTIONS */
 document.getElementById("keepRatio").addEventListener("change", async () => {
   if (!document.getElementById("keepRatio").checked) return;
 
@@ -370,160 +428,221 @@ document.getElementById("keepRatio").addEventListener("change", async () => {
 
   let url;
   try {
-    const { img, url: imageUrl } = await getImage(file);
-    url = imageUrl;
+    const result = await getImage(file);
+    url = result.url;
 
     const w = Number(document.getElementById("width").value);
-    if (w > 0) {
-      document.getElementById("height").value =
-        Math.round(w * img.naturalHeight / img.naturalWidth);
+    const h = Math.round(w * result.img.naturalHeight / result.img.naturalWidth);
+
+    if (w > 0 && h <= MAX_DIMENSION) {
+      document.getElementById("height").value = h;
     }
   } catch (error) {
-    // The resize button will report any file error.
+    // The resize button displays errors.
   } finally {
     if (url) URL.revokeObjectURL(url);
   }
 });
 
-/* SVG TO PNG */
-document.getElementById("svgToPngButton").addEventListener("click", async () => {
+/* SVG TO PNG: WIDTH AND HEIGHT UP TO 10000 */
+(() => {
   const input = document.getElementById("svgToPngFile");
   const widthInput = document.getElementById("svgPngWidth");
+  const heightInput = document.getElementById("svgPngHeight");
+  const keepRatio = document.getElementById("svgPngKeepRatio");
   const status = document.getElementById("svgToPngStatus");
   const download = document.getElementById("svgToPngDownload");
   const button = document.getElementById("svgToPngButton");
 
-  download.hidden = true;
-  button.disabled = true;
-  status.textContent = "Converting SVG to PNG...";
+  let sourceRatio = 1;
 
-  let objectUrl;
-
-  try {
-    const file = input.files[0];
-
-    if (!file) throw new Error("Please choose an SVG file first.");
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error("Please choose an SVG smaller than 5 MB.");
-    }
-
-    const width = Number(widthInput.value);
-    if (!Number.isInteger(width) || width < 1 || width > 12000) {
-      throw new Error("Enter a width between 1 and 12000 pixels.");
-    }
-
-    const svgText = await file.text();
-    const xml = new DOMParser().parseFromString(svgText, "image/svg+xml");
-    const svg = xml.documentElement;
-
-    if (xml.querySelector("parsererror") || svg.localName !== "svg") {
-      throw new Error("This does not appear to be a valid SVG file.");
-    }
-
-    /* Reject scripts, embedded HTML and external references. */
-    if (xml.querySelector("script, foreignObject, iframe, object, embed")) {
-      throw new Error("This SVG contains active content and cannot be processed.");
-    }
-
-    const allElements = [svg, ...svg.querySelectorAll("*")];
-
-    for (const element of allElements) {
-      for (const attribute of [...element.attributes]) {
-        const name = attribute.name.toLowerCase();
-        const value = attribute.value.trim();
-
-        if (name.startsWith("on")) {
-          throw new Error("This SVG contains event handlers and cannot be processed.");
-        }
-
-        if (["href", "xlink:href"].includes(name) &&
-            /^(https?:|\/\/|javascript:|data:)/i.test(value)) {
-          throw new Error("Please use an SVG without external or embedded image references.");
-        }
-
-        if (/url\(\s*["']?(https?:|\/\/|data:)/i.test(value)) {
-          throw new Error("This SVG contains external resources and cannot be processed.");
-        }
-      }
-    }
-
-    let height;
+  function getSvgRatio(svg) {
     const viewBox = svg.getAttribute("viewBox");
 
     if (viewBox) {
       const parts = viewBox.trim().split(/[\s,]+/).map(Number);
-      if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
-        height = Math.round(width * parts[3] / parts[2]);
+      if (parts.length === 4 &&
+          parts.every(Number.isFinite) &&
+          parts[2] > 0 && parts[3] > 0) {
+        return parts[2] / parts[3];
       }
     }
 
-    if (!height) {
-      const svgWidth = parseFloat(svg.getAttribute("width"));
-      const svgHeight = parseFloat(svg.getAttribute("height"));
+    const w = parseFloat(svg.getAttribute("width"));
+    const h = parseFloat(svg.getAttribute("height"));
 
-      if (svgWidth > 0 && svgHeight > 0) {
-        height = Math.round(width * svgHeight / svgWidth);
-      } else {
-        height = width;
-      }
-    }
-
-    if (!Number.isFinite(height) || height < 1 || height > 12000) {
-      throw new Error("The resulting height must be between 1 and 12000 pixels.");
-    }
-
-    svg.setAttribute("width", String(width));
-    svg.setAttribute("height", String(height));
-
-    const cleanedSvg = new XMLSerializer().serializeToString(xml);
-    const svgBlob = new Blob([cleanedSvg], {
-      type: "image/svg+xml;charset=utf-8"
-    });
-
-    objectUrl = URL.createObjectURL(svgBlob);
-    const image = new Image();
-
-    await new Promise((resolve, reject) => {
-      image.onload = resolve;
-      image.onerror = () => reject(
-        new Error("Your browser could not render this SVG.")
-      );
-      image.src = objectUrl;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvas is unavailable in this browser.");
-
-    context.clearRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-
-    const pngBlob = await new Promise(resolve =>
-      canvas.toBlob(resolve, "image/png")
-    );
-
-    if (!pngBlob) throw new Error("Could not create the PNG image.");
-
-    if (download.dataset.url) {
-      URL.revokeObjectURL(download.dataset.url);
-    }
-
-    const pngUrl = URL.createObjectURL(pngBlob);
-    download.dataset.url = pngUrl;
-    download.href = pngUrl;
-    download.download = "pixelforge.png";
-    download.hidden = false;
-    status.textContent = `Done! PNG created at ${width} × ${height} pixels.`;
-  } catch (error) {
-    status.textContent = error.message || "Conversion failed.";
-  } finally {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    button.disabled = false;
+    if (w > 0 && h > 0) return w / h;
+    return 1;
   }
-});
+
+  function updateHeightFromWidth() {
+    if (!keepRatio.checked || !(sourceRatio > 0)) return;
+
+    const w = Number(widthInput.value);
+    if (!Number.isFinite(w) || w < 1) return;
+
+    const h = Math.round(w / sourceRatio);
+    if (h >= 1 && h <= MAX_DIMENSION) {
+      heightInput.value = h;
+    }
+  }
+
+  widthInput.addEventListener("input", updateHeightFromWidth);
+  keepRatio.addEventListener("change", updateHeightFromWidth);
+
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    try {
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("Please choose an SVG smaller than 5 MB.");
+      }
+
+      const text = await file.text();
+      const xml = new DOMParser().parseFromString(text, "image/svg+xml");
+      const svg = xml.documentElement;
+
+      if (xml.querySelector("parsererror") || svg.localName !== "svg") {
+        throw new Error("This does not appear to be a valid SVG file.");
+      }
+
+      sourceRatio = getSvgRatio(svg);
+      updateHeightFromWidth();
+      status.textContent = "SVG selected. Choose your output dimensions.";
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  });
+
+  button.addEventListener("click", async () => {
+    let objectUrl;
+
+    download.hidden = true;
+    button.disabled = true;
+    status.textContent = "Converting SVG to PNG...";
+
+    try {
+      const file = input.files[0];
+
+      if (!file) throw new Error("Please choose an SVG file first.");
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("Please choose an SVG smaller than 5 MB.");
+      }
+
+      const svgText = await file.text();
+      const xml = new DOMParser().parseFromString(svgText, "image/svg+xml");
+      const svg = xml.documentElement;
+
+      if (xml.querySelector("parsererror") || svg.localName !== "svg") {
+        throw new Error("This does not appear to be a valid SVG file.");
+      }
+
+      if (xml.querySelector("script, foreignObject, iframe, object, embed")) {
+        throw new Error("This SVG contains active content and cannot be processed.");
+      }
+
+      const allElements = [svg, ...svg.querySelectorAll("*")];
+
+      for (const element of allElements) {
+        for (const attribute of [...element.attributes]) {
+          const name = attribute.name.toLowerCase();
+          const value = attribute.value.trim();
+
+          if (name.startsWith("on")) {
+            throw new Error("This SVG contains event handlers.");
+          }
+
+          if (["href", "xlink:href"].includes(name) &&
+              /^(https?:|\/\/|javascript:|data:)/i.test(value)) {
+            throw new Error("SVGs with external or embedded image references are not supported.");
+          }
+
+          if (/url\(\s*["']?(https?:|\/\/|data:)/i.test(value)) {
+            throw new Error("This SVG contains external resources.");
+          }
+        }
+      }
+
+      sourceRatio = getSvgRatio(svg);
+
+      let width = Number(widthInput.value);
+      let height = Number(heightInput.value);
+
+      if (!Number.isInteger(width) || !Number.isInteger(height) ||
+          width < 1 || height < 1 ||
+          width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        throw new Error("Enter width and height between 1 and 10000 pixels.");
+      }
+
+      if (keepRatio.checked) {
+        height = Math.round(width / sourceRatio);
+
+        if (height > MAX_DIMENSION) {
+          height = MAX_DIMENSION;
+          width = Math.max(1, Math.round(height * sourceRatio));
+        }
+
+        if (height < 1) height = 1;
+
+        widthInput.value = width;
+        heightInput.value = height;
+      }
+
+      // Avoid excessive memory use on phones and browsers.
+      if (width * height > 40000000) {
+        throw new Error("This output is too large for reliable browser processing. Try smaller dimensions.");
+      }
+
+      svg.setAttribute("width", String(width));
+      svg.setAttribute("height", String(height));
+
+      const cleanedSvg = new XMLSerializer().serializeToString(xml);
+      const svgBlob = new Blob([cleanedSvg], {
+        type: "image/svg+xml;charset=utf-8"
+      });
+
+      objectUrl = URL.createObjectURL(svgBlob);
+      const image = new Image();
+
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(
+          new Error("Your browser could not render this SVG.")
+        );
+        image.src = objectUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is unavailable in this browser.");
+
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      const pngBlob = await new Promise(resolve =>
+        canvas.toBlob(resolve, "image/png")
+      );
+
+      if (!pngBlob) {
+        throw new Error("Could not create the PNG. Try smaller dimensions.");
+      }
+
+      setDownload(download, pngBlob, "pixelforge.png");
+
+      status.textContent =
+        `Done! PNG created at ${width} × ${height} pixels.`;
+    } catch (error) {
+      status.textContent = error.message || "Conversion failed.";
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      button.disabled = false;
+    }
+  });
+})();
 
 /* BACKEND HEALTH CHECK */
 document.getElementById("backendBtn").addEventListener("click", async () => {
@@ -538,15 +657,18 @@ document.getElementById("backendBtn").addEventListener("click", async () => {
       "https://pixelforge-api.onrender.com/api/health"
     );
 
-    if (!response.ok) throw new Error("Server returned " + response.status);
+    if (!response.ok) {
+      throw new Error("Server returned " + response.status);
+    }
 
     const data = await response.json();
+
     status.textContent = data.status === "ok"
       ? "Connected successfully to PixelForge API."
       : "Backend responded, but the health status is unexpected.";
   } catch (error) {
     status.textContent =
-      "Could not connect right now. The free server may be waking up. Try again in a minute.";
+      "Could not connect. The free server may be waking up. Try again in a minute.";
   } finally {
     button.disabled = false;
   }
@@ -573,7 +695,7 @@ document.getElementById("backendBtn").addEventListener("click", async () => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE) {
       status.textContent = "Please choose an image smaller than 5 MB.";
       return;
     }
