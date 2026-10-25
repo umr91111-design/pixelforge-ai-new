@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#101827">
   <title>PixelForge AI — Free Online Image Tools</title>
   <meta name="description" content="Free online image converter, resizer, SVG to PNG converter, and image to SVG vectorizer.">
+
   <style>
     :root {
       --bg: #0b1020;
@@ -312,11 +313,25 @@
       <div class="dimensions">
         <div>
           <label for="svgPngWidth">Output width (px)</label>
-          <input id="svgPngWidth" type="number" min="1" max="10000" value="2000">
+          <input
+            id="svgPngWidth"
+            type="number"
+            min="1000"
+            max="8000"
+            step="100"
+            value="2000"
+          >
         </div>
         <div>
           <label for="svgPngHeight">Output height (px)</label>
-          <input id="svgPngHeight" type="number" min="1" max="10000" value="2000">
+          <input
+            id="svgPngHeight"
+            type="number"
+            min="1000"
+            max="8000"
+            step="100"
+            value="2000"
+          >
         </div>
       </div>
 
@@ -368,6 +383,7 @@
       <p>Increase image resolution with AI-powered enhancement.</p>
       <div class="note">AI upscaling is not connected yet. This feature requires an image-upscaling backend.</div>
     </article>
+
   </section>
 
   <div class="note">
@@ -388,6 +404,11 @@ const MAX_DIMENSION = 10000;
 const MAX_PIXELS = 40000000;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
+/* SVG-TO-PNG LIMITS ONLY */
+const SVG_MIN_DIMENSION = 1000;
+const SVG_MAX_DIMENSION = 8000;
+const SVG_MAX_PIXELS = 40000000;
+
 const $ = id => document.getElementById(id);
 
 function status(id, message, type = "info") {
@@ -401,10 +422,12 @@ function validateFile(file, statusId) {
     status(statusId, "Please choose a file first.", "error");
     return false;
   }
+
   if (file.size > MAX_FILE_SIZE) {
     status(statusId, "File is too large. Maximum size is 5 MB.", "error");
     return false;
   }
+
   return true;
 }
 
@@ -412,11 +435,14 @@ function imageFromFile(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
+
     img.onload = () => resolve({ img, url });
+
     img.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error("Could not read this image."));
     };
+
     img.src = url;
   });
 }
@@ -432,7 +458,10 @@ function canvasBlob(canvas, type) {
 
 function downloadBlob(blob, filename, linkId) {
   const link = $(linkId);
-  if (link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+
+  if (link.dataset.url) {
+    URL.revokeObjectURL(link.dataset.url);
+  }
 
   const url = URL.createObjectURL(blob);
   link.href = url;
@@ -445,7 +474,10 @@ function showPreview(previewId, blob) {
   const wrap = $(previewId);
   const img = wrap.querySelector("img");
 
-  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  if (img.dataset.url) {
+    URL.revokeObjectURL(img.dataset.url);
+  }
+
   const url = URL.createObjectURL(blob);
   img.dataset.url = url;
   img.src = url;
@@ -464,12 +496,16 @@ $("convertButton").addEventListener("click", async () => {
   const button = $("convertButton");
   button.disabled = true;
 
+  let url = null;
+
   try {
     status("convertStatus", "Converting image…");
-    const { img, url } = await imageFromFile(file);
+
+    const result = await imageFromFile(file);
+    const img = result.img;
+    url = result.url;
 
     if (img.naturalWidth * img.naturalHeight > MAX_PIXELS) {
-      URL.revokeObjectURL(url);
       throw new Error("Image is too large to process safely.");
     }
 
@@ -479,22 +515,27 @@ $("convertButton").addEventListener("click", async () => {
     canvas.height = img.naturalHeight;
 
     const ctx = canvas.getContext("2d");
+
     if (type === "image/jpeg") {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+
     ctx.drawImage(img, 0, 0);
 
     const blob = await canvasBlob(canvas, type);
     URL.revokeObjectURL(url);
+    url = null;
 
     const ext = type.split("/")[1];
     downloadBlob(blob, safeBaseName(file.name) + "." + ext, "convertDownload");
     showPreview("convertPreview", blob);
+
     status("convertStatus", "Image converted successfully.", "success");
   } catch (error) {
     status("convertStatus", error.message || "Conversion failed.", "error");
   } finally {
+    if (url) URL.revokeObjectURL(url);
     button.disabled = false;
   }
 });
@@ -506,16 +547,24 @@ $("resizeFile").addEventListener("change", async () => {
   const file = $("resizeFile").files[0];
   if (!file) return;
 
+  let url = null;
+
   try {
     if (!validateFile(file, "resizeStatus")) return;
-    const { img, url } = await imageFromFile(file);
+
+    const result = await imageFromFile(file);
+    const img = result.img;
+    url = result.url;
+
     resizeRatio = img.naturalWidth / img.naturalHeight;
     $("resizeWidth").value = img.naturalWidth;
     $("resizeHeight").value = img.naturalHeight;
-    URL.revokeObjectURL(url);
+
     status("resizeStatus", "Image loaded.", "success");
   } catch (error) {
-    status("resizeStatus", error.message, "error");
+    status("resizeStatus", error.message || "Could not load image.", "error");
+  } finally {
+    if (url) URL.revokeObjectURL(url);
   }
 });
 
@@ -554,9 +603,15 @@ $("resizeButton").addEventListener("click", async () => {
   const button = $("resizeButton");
   button.disabled = true;
 
+  let url = null;
+
   try {
     status("resizeStatus", "Resizing image…");
-    const { img, url } = await imageFromFile(file);
+
+    const result = await imageFromFile(file);
+    const img = result.img;
+    url = result.url;
+
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
@@ -570,20 +625,28 @@ $("resizeButton").addEventListener("click", async () => {
     }
 
     ctx.drawImage(img, 0, 0, w, h);
+
     const blob = await canvasBlob(canvas, type);
     URL.revokeObjectURL(url);
+    url = null;
 
-    downloadBlob(blob, safeBaseName(file.name) + "-resized." + type.split("/")[1], "resizeDownload");
+    downloadBlob(
+      blob,
+      safeBaseName(file.name) + "-resized." + type.split("/")[1],
+      "resizeDownload"
+    );
+
     showPreview("resizePreview", blob);
     status("resizeStatus", "Image resized successfully.", "success");
   } catch (error) {
     status("resizeStatus", error.message || "Resizing failed.", "error");
   } finally {
+    if (url) URL.revokeObjectURL(url);
     button.disabled = false;
   }
 });
 
-/* SVG TO PNG: RENDER AND TRIM TRANSPARENT MARGINS */
+/* SVG TO PNG: HIGH-RESOLUTION OUTPUT AND TRANSPARENT MARGIN TRIMMING */
 (() => {
   const fileInput = $("svgToPngFile");
   const widthInput = $("svgPngWidth");
@@ -636,7 +699,11 @@ $("resizeButton").addEventListener("click", async () => {
 
     if (vb) {
       const nums = vb.trim().split(/[\s,]+/).map(Number);
-      if (nums.length === 4 && nums[2] > 0 && nums[3] > 0) {
+
+      if (nums.length === 4 &&
+          nums.every(Number.isFinite) &&
+          nums[2] > 0 &&
+          nums[3] > 0) {
         return nums[2] / nums[3];
       }
     }
@@ -650,8 +717,12 @@ $("resizeButton").addEventListener("click", async () => {
 
   function updateHeight() {
     if (!keepRatio.checked || !(originalRatio > 0)) return;
+
     const w = Number(widthInput.value);
-    if (w > 0) heightInput.value = Math.round(w / originalRatio);
+
+    if (w > 0) {
+      heightInput.value = Math.round(w / originalRatio);
+    }
   }
 
   widthInput.addEventListener("input", updateHeight);
@@ -666,16 +737,23 @@ $("resizeButton").addEventListener("click", async () => {
     try {
       const text = await file.text();
       const svg = parseSvg(text);
+
       originalRatio = getRatio(svg);
       updateHeight();
-      status(statusId, "SVG loaded. Choose your PNG dimensions.", "success");
+
+      status(
+        statusId,
+        "SVG loaded. Choose dimensions between 1000 and 8000 pixels.",
+        "success"
+      );
     } catch (error) {
-      status(statusId, error.message, "error");
+      status(statusId, error.message || "Could not load SVG.", "error");
     }
   });
 
   button.addEventListener("click", async () => {
     const file = fileInput.files[0];
+
     if (!validateFile(file, statusId)) return;
 
     let blobUrl = null;
@@ -690,10 +768,17 @@ $("resizeButton").addEventListener("click", async () => {
       const requestedWidth = Number(widthInput.value);
       const requestedHeight = Number(heightInput.value);
 
-      if (!Number.isInteger(requestedWidth) || !Number.isInteger(requestedHeight) ||
-          requestedWidth < 1 || requestedHeight < 1 ||
-          requestedWidth > MAX_DIMENSION || requestedHeight > MAX_DIMENSION) {
-        throw new Error("Width and height must be between 1 and 10000.");
+      if (
+        !Number.isInteger(requestedWidth) ||
+        !Number.isInteger(requestedHeight) ||
+        requestedWidth < SVG_MIN_DIMENSION ||
+        requestedHeight < SVG_MIN_DIMENSION ||
+        requestedWidth > SVG_MAX_DIMENSION ||
+        requestedHeight > SVG_MAX_DIMENSION
+      ) {
+        throw new Error(
+          "Width and height must each be between 1000 and 8000 pixels."
+        );
       }
 
       let width = requestedWidth;
@@ -702,18 +787,34 @@ $("resizeButton").addEventListener("click", async () => {
       if (keepRatio.checked) {
         originalRatio = getRatio(svg);
         height = Math.round(width / originalRatio);
-        if (height < 1 || height > MAX_DIMENSION) {
-          throw new Error("Calculated height exceeds the 10000-pixel limit. Reduce the width.");
+
+        if (
+          height < SVG_MIN_DIMENSION ||
+          height > SVG_MAX_DIMENSION
+        ) {
+          throw new Error(
+            "Keeping the aspect ratio would put the height outside 1000–8000 pixels. Adjust the width or turn off Keep aspect ratio."
+          );
         }
+
         heightInput.value = height;
       }
 
-      if (width * height > MAX_PIXELS) {
-        throw new Error("Output is too large. Maximum output is 40 million pixels.");
+      if (width * height > SVG_MAX_PIXELS) {
+        throw new Error(
+          "Output exceeds the 40-million-pixel safety limit. Reduce the dimensions."
+        );
       }
 
-      // Render at a moderate resolution first, then inspect the alpha channel.
-      const previewScale = Math.min(1, 1600 / Math.max(width, height));
+      /*
+       * Render at a moderate resolution for detecting visible artwork.
+       * The final PNG is rendered at the requested output resolution.
+       */
+      const previewScale = Math.min(
+        1,
+        1600 / Math.max(width, height)
+      );
+
       const renderWidth = Math.max(1, Math.round(width * previewScale));
       const renderHeight = Math.max(1, Math.round(height * previewScale));
 
@@ -722,14 +823,26 @@ $("resizeButton").addEventListener("click", async () => {
       svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
       const serialized = new XMLSerializer().serializeToString(svg);
-      blobUrl = URL.createObjectURL(new Blob([serialized], {
-        type: "image/svg+xml;charset=utf-8"
-      }));
+
+      blobUrl = URL.createObjectURL(
+        new Blob([serialized], {
+          type: "image/svg+xml;charset=utf-8"
+        })
+      );
 
       const img = new Image();
+
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = () => reject(new Error("Could not render this SVG. It may contain unsupported features."));
+
+        img.onerror = () => {
+          reject(
+            new Error(
+              "Could not render this SVG. It may contain unsupported features."
+            )
+          );
+        };
+
         img.src = blobUrl;
       });
 
@@ -737,23 +850,39 @@ $("resizeButton").addEventListener("click", async () => {
       temp.width = renderWidth;
       temp.height = renderHeight;
 
-      const tctx = temp.getContext("2d", { willReadFrequently: true });
+      const tctx = temp.getContext("2d", {
+        willReadFrequently: true
+      });
+
+      if (!tctx) {
+        throw new Error("Could not create the temporary rendering canvas.");
+      }
+
       tctx.clearRect(0, 0, renderWidth, renderHeight);
       tctx.drawImage(img, 0, 0, renderWidth, renderHeight);
 
       let pixels;
+
       try {
-        pixels = tctx.getImageData(0, 0, renderWidth, renderHeight).data;
+        pixels = tctx.getImageData(
+          0, 0, renderWidth, renderHeight
+        ).data;
       } catch {
-        throw new Error("Could not inspect transparency in the rendered SVG.");
+        throw new Error(
+          "Could not inspect transparency in the rendered SVG."
+        );
       }
 
-      let minX = renderWidth, minY = renderHeight, maxX = -1, maxY = -1;
+      let minX = renderWidth;
+      let minY = renderHeight;
+      let maxX = -1;
+      let maxY = -1;
 
-      // Find visible pixels using alpha. Very faint pixels count as visible.
+      // Detect visible pixels using the alpha channel.
       for (let y = 0; y < renderHeight; y++) {
         for (let x = 0; x < renderWidth; x++) {
           const alpha = pixels[(y * renderWidth + x) * 4 + 3];
+
           if (alpha > 2) {
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
@@ -767,9 +896,16 @@ $("resizeButton").addEventListener("click", async () => {
         throw new Error("No visible artwork was found in this SVG.");
       }
 
-      // Add a small transparent safety margin around the detected artwork.
-      const padX = Math.max(1, Math.round((maxX - minX + 1) * 0.01));
-      const padY = Math.max(1, Math.round((maxY - minY + 1) * 0.01));
+      // Add a small margin around the detected artwork.
+      const padX = Math.max(
+        1,
+        Math.round((maxX - minX + 1) * 0.01)
+      );
+
+      const padY = Math.max(
+        1,
+        Math.round((maxY - minY + 1) * 0.01)
+      );
 
       minX = Math.max(0, minX - padX);
       minY = Math.max(0, minY - padY);
@@ -779,33 +915,68 @@ $("resizeButton").addEventListener("click", async () => {
       const cropW = maxX - minX + 1;
       const cropH = maxY - minY + 1;
 
+      /*
+       * Scale the detected crop coordinates back to the SVG's
+       * original coordinate space before rendering the final PNG.
+       */
+      const cropScaleX = width / renderWidth;
+      const cropScaleY = height / renderHeight;
+
+      const sourceX = minX * cropScaleX;
+      const sourceY = minY * cropScaleY;
+      const sourceW = cropW * cropScaleX;
+      const sourceH = cropH * cropScaleY;
+
       const output = document.createElement("canvas");
       output.width = width;
       output.height = height;
 
       const ctx = output.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("Could not create the final PNG canvas.");
+      }
+
       ctx.clearRect(0, 0, width, height);
 
-      // Fit the cropped artwork inside the requested transparent canvas.
-      const scale = Math.min(width / cropW, height / cropH);
-      const drawW = cropW * scale;
-      const drawH = cropH * scale;
+      /*
+       * Render the artwork into the final high-resolution canvas.
+       * Preserve its proportions and center it on a transparent
+       * background.
+       */
+      const scale = Math.min(width / sourceW, height / sourceH);
+      const drawW = sourceW * scale;
+      const drawH = sourceH * scale;
       const dx = (width - drawW) / 2;
       const dy = (height - drawH) / 2;
 
       ctx.drawImage(
-        temp,
+        img,
         minX, minY, cropW, cropH,
         dx, dy, drawW, drawH
       );
 
       const png = await canvasBlob(output, "image/png");
-      downloadBlob(png, safeBaseName(file.name) + ".png", "svgToPngDownload");
+
+      downloadBlob(
+        png,
+        safeBaseName(file.name) + ".png",
+        "svgToPngDownload"
+      );
+
       showPreview("svgToPngPreview", png);
 
-      status(statusId, "PNG created with transparent background and trimmed margins.", "success");
+      status(
+        statusId,
+        "PNG created successfully with a transparent background.",
+        "success"
+      );
     } catch (error) {
-      status(statusId, error.message || "SVG conversion failed.", "error");
+      status(
+        statusId,
+        error.message || "SVG conversion failed.",
+        "error"
+      );
     } finally {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       button.disabled = false;
@@ -835,7 +1006,9 @@ $("traceButton").addEventListener("click", async () => {
 
     if (!response.ok) {
       const message = await response.text();
-      throw new Error(message || "The tracing server returned an error.");
+      throw new Error(
+        message || "The tracing server returned an error."
+      );
     }
 
     const contentType = response.headers.get("content-type") || "";
@@ -852,15 +1025,28 @@ $("traceButton").addEventListener("click", async () => {
       throw new Error("The server did not return a valid SVG response.");
     }
 
-    const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
-    downloadBlob(blob, safeBaseName(file.name) + ".svg", "traceDownload");
+    const blob = new Blob([svgText], {
+      type: "image/svg+xml;charset=utf-8"
+    });
 
-    const previewBlob = new Blob([svgText], { type: "image/svg+xml" });
-    showPreview("tracePreview", previewBlob);
+    downloadBlob(
+      blob,
+      safeBaseName(file.name) + ".svg",
+      "traceDownload"
+    );
+
+    showPreview(
+      "tracePreview",
+      new Blob([svgText], { type: "image/svg+xml" })
+    );
 
     status("traceStatus", "Vector SVG created successfully.", "success");
   } catch (error) {
-    status("traceStatus", "Conversion failed: " + (error.message || "Check your backend."), "error");
+    status(
+      "traceStatus",
+      "Conversion failed: " + (error.message || "Check your backend."),
+      "error"
+    );
   } finally {
     button.disabled = false;
   }
@@ -870,16 +1056,29 @@ $("traceButton").addEventListener("click", async () => {
 $("healthButton").addEventListener("click", async () => {
   const button = $("healthButton");
   button.disabled = true;
+
   status("healthStatus", "Checking backend…");
 
   try {
     const response = await fetch(API_BASE + "/api/health");
-    if (!response.ok) throw new Error("Server returned HTTP " + response.status);
+
+    if (!response.ok) {
+      throw new Error("Server returned HTTP " + response.status);
+    }
 
     const data = await response.json();
-    status("healthStatus", "Backend is online. " + (data.message || ""), "success");
+
+    status(
+      "healthStatus",
+      "Backend is online. " + (data.message || ""),
+      "success"
+    );
   } catch (error) {
-    status("healthStatus", "Could not reach backend. It may be starting up. " + error.message, "error");
+    status(
+      "healthStatus",
+      "Could not reach backend. It may be starting up. " + error.message,
+      "error"
+    );
   } finally {
     button.disabled = false;
   }
