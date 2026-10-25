@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>PixelForge AI — Free Image Tools</title>
+<meta name="description" content="Free online image converter, resizer and AI image tools.">
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c30;--line:#293651;--text:#f4f7ff;--muted:#a8b4cb;--accent:#8b7cff;--cyan:#50e3d0}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#1a2850,var(--bg) 55%);color:var(--text);font-family:system-ui,-apple-system,Arial,sans-serif;min-height:100vh}
+header{padding:22px 6%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #293651;gap:12px}
+.logo{font-size:21px;font-weight:850;letter-spacing:-.7px}.logo span{color:var(--cyan)}
+.pill{font-size:12px;color:var(--cyan);border:1px solid #286d70;border-radius:30px;padding:7px 12px}
+main{max-width:1050px;margin:auto;padding:48px 20px}
+.hero{text-align:center;margin-bottom:34px}
+h1{font-size:clamp(34px,7vw,58px);line-height:1.08;letter-spacing:-2px;margin:0 0 16px}
+h1 span{background:linear-gradient(90deg,var(--cyan),#a59aff);color:transparent;background-clip:text}
+p{color:var(--muted);line-height:1.65}
+.hero p{max-width:600px;margin:auto}
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:16px}
+.card{background:#141c30eF;border:1px solid var(--line);border-radius:18px;padding:21px;min-width:0}
+.card h2{font-size:18px;margin:0 0 7px}.card p{font-size:13px;margin:0 0 17px}
+.upload{display:block;border:1px dashed #596b91;border-radius:12px;padding:20px;text-align:center;cursor:pointer;color:#dce5ff}
+input[type=file]{width:100%;font-size:12px;margin-top:12px;color:var(--muted)}
+input[type=number],select{width:100%;padding:11px;border:1px solid #384764;border-radius:9px;background:#0c1427;color:white;margin:7px 0 12px}
+label{display:block;font-size:13px;color:#d5def2;margin-top:10px}
+button,.download{border:0;border-radius:10px;background:linear-gradient(100deg,#8272ff,#5b9dff);padding:12px 14px;color:white;font-weight:750;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
+button:disabled{opacity:.45;cursor:not-allowed}
+.action{width:100%;margin-top:14px}
+.preview{display:block;max-width:100%;max-height:240px;margin:14px auto 0;border-radius:10px}
+.status{font-size:13px;min-height:22px;margin-top:10px;overflow-wrap:anywhere}
+.small{font-size:12px;color:var(--muted)}
+footer{text-align:center;padding:24px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+a{color:var(--cyan)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PixelForge <span>AI</span></div>
+  <div class="pill">FREE IMAGE TOOLS</div>
+</header>
+<main>
+<section class="hero">
+  <h1>Your images.<br><span>Forged to perfection.</span></h1>
+  <p>Convert, resize and prepare your images in seconds. Simple tools that run directly in your browser.</p>
+</section>
+
+<div class="tools">
+<section class="card">
+<h2>🖼️ Image converter</h2>
+<p>Convert JPG, PNG and WebP images into another format.</p>
+<label class="upload">Choose an image
+<input id="convertFile" type="file" accept="image/*">
+</label>
+<label for="format">Output format</label>
+<select id="format"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option><option value="image/webp">WebP</option></select>
+<button class="action" id="convertBtn">Convert image</button>
+<div class="status" id="convertStatus" aria-live="polite"></div>
+<a class="download" id="convertDownload" hidden>Download converted image</a>
+</section>
+
+<section class="card">
+<h2>📐 Image resizer</h2>
+<p>Change an image's dimensions in your browser.</p>
+<label class="upload">Choose an image
+<input id="resizeFile" type="file" accept="image/*">
+</label>
+<label for="width">Width (pixels)</label><input id="width" type="number" min="1" max="12000" value="800">
+<label for="height">Height (pixels)</label><input id="height" type="number" min="1" max="12000" value="800">
+<label><input id="keepRatio" type="checkbox" checked> Keep original proportions</label>
+<button class="action" id="resizeBtn">Resize image</button>
+<div class="status" id="resizeStatus" aria-live="polite"></div>
+<a class="download" id="resizeDownload" hidden>Download resized image</a>
+</section>
+
+<section class="card">
+<h2>✂️ Background remover</h2>
+<p>AI background removal will be available when an image-processing service is connected.</p>
+<button class="action" id="backendBtn">Check backend connection</button>
+<div class="status" id="backendStatus" aria-live="polite">Backend connection not checked yet.</div>
+</section>
+
+<section class="card">
+<h2>✒️ Image to SVG</h2>
+<p>Trace a raster image into vector paths using VTracer when its processing service is configured.</p>
+<p class="small">SVG tracing is not enabled in this starter version.</p>
+</section>
+
+<section class="card">
+<h2>✨ AI image upscaler</h2>
+<p>AI enlargement requires a dedicated image-processing model or API.</p>
+<p class="small">Upscaling is not enabled in this starter version.</p>
+</section>
+
+<section class="card">
+<h2>🔒 Private by design</h2>
+<p>Image conversion and resizing happen in your browser. Those tools do not upload your selected image to our backend.</p>
+</section>
+</div>
+</main>
+<footer>PixelForge AI · Free online image tools</footer>
+
+<script>
+function getImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file) return reject(new Error("Please choose an image first."));
+    if(!file.type.startsWith("image/")) return reject(new Error("Please select a valid image file."));
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>resolve({img,url});
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Unable to read this image."));};
+    img.src=url;
+  });
+}
+function saveCanvas(canvas,type,link,status){
+  const mime=type==="image/jpeg"||type==="image/webp"?type:"image/png";
+  canvas.toBlob(blob=>{
+    if(!blob){status.textContent="Could not convert this image.";return;}
+    if(link.dataset.url)URL.revokeObjectURL(link.dataset.url);
+    const url=URL.createObjectURL(blob);
+    link.dataset.url=url;link.href=url;
+    link.download="pixelforge-image."+({"image/jpeg":"jpg","image/webp":"webp"}[mime]||"png");
+    link.hidden=false;status.textContent="Finished! Tap the download link.";
+  },mime,.92);
+}
+document.getElementById("convertBtn").addEventListener("click",async()=>{
+  const status=document.getElementById("convertStatus"),link=document.getElementById("convertDownload");
+  link.hidden=true;status.textContent="Processing...";
+  try{
+    const {img,url}=await getImage(document.getElementById("convertFile").files[0]);
+    const canvas=document.createElement("canvas");canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+    canvas.getContext("2d").drawImage(img,0,0);URL.revokeObjectURL(url);
+    saveCanvas(canvas,document.getElementById("format").value,link,status);
+  }catch(e){status.textContent=e.message;}
+});
+document.getElementById("resizeBtn").addEventListener("click",async()=>{
+  const status=document.getElementById("resizeStatus"),link=document.getElementById("resizeDownload");
+  link.hidden=true;status.textContent="Processing...";
+  try{
+    const {img,url}=await getImage(document.getElementById("resizeFile").files[0]);
+    let w=Number(document.getElementById("width").value),h=Number(document.getElementById("height").value);
+    if(!Number.isInteger(w)||!Number.isInteger(h)||w<1||h<1||w>12000||h>12000)throw new Error("Enter dimensions between 1 and 12000 pixels.");
+    if(document.getElementById("keepRatio").checked){
+      const ratio=img.naturalWidth/img.naturalHeight;
+      if(w/h>ratio)w=Math.round(h*ratio);else h=Math.round(w/ratio);
+      document.getElementById("width").value=w;document.getElementById("height").value=h;
+    }
+    const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+    canvas.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+    saveCanvas(canvas,"image/png",link,status);
+  }catch(e){status.textContent=e.message;}
+});
+document.getElementById("keepRatio").addEventListener("change",async()=>{
+  if(!document.getElementById("keepRatio").checked)return;
+  const file=document.getElementById("resizeFile").files[0];if(!file)return;
+  try{
+    const {img,url}=await getImage(file);
+    const w=Number(document.getElementById("width").value);
+    if(w>0){document.getElementById("height").value=Math.round(w*img.naturalHeight/img.naturalWidth);}
+    URL.revokeObjectURL(url);
+  }catch(e){}
+});
+document.getElementById("backendBtn").addEventListener("click",async()=>{
+  const status=document.getElementById("backendStatus"),btn=document.getElementById("backendBtn");
+  btn.disabled=true;status.textContent="Checking backend...";
+  try{
+    const response=await fetch("https://pixelforge-api.onrender.com/api/health");
+    if(!response.ok)throw new Error("Server returned "+response.status);
+    const data=await response.json();
+    status.textContent=data.status==="ok"?"Connected successfully to PixelForge API.":"Backend responded, but health status is unexpected.";
+  }catch(e){status.textContent="Could not connect right now. The free server may be waking up. Try again in a minute.";}
+  finally{btn.disabled=false;}
+});
+</script>
+</body>
+</html>
