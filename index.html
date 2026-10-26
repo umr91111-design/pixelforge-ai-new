@@ -368,6 +368,24 @@
       <div id="tracePreview" class="preview"><img alt="Vectorized image preview"></div>
     </article>
 
+    <!-- BACKGROUND REMOVER -->
+    <article class="card">
+      <div class="icon">✂️</div>
+      <h2>AI Background Remover</h2>
+      <p>Remove image backgrounds in your browser and download a transparent PNG.</p>
+
+      <label for="bgRemoveFile">Choose an image</label>
+      <input id="bgRemoveFile" type="file" accept="image/png,image/jpeg,image/webp">
+
+      <button id="bgRemoveButton">Remove Background</button>
+      <div id="bgRemoveStatus" class="status" role="status"></div>
+
+      <a id="bgRemoveDownload" class="download" hidden>Download Transparent PNG</a>
+      <div id="bgRemovePreview" class="preview">
+        <img alt="Image with background removed">
+      </div>
+    </article>
+
     <!-- UPSCALER -->
     <article class="card">
       <div class="icon">✨</div>
@@ -1071,6 +1089,153 @@ $("traceButton").addEventListener("click", async () => {
     status(
       "traceStatus",
       "Conversion failed: " +
+        (error.message || "Please try another image."),
+      "error"
+    );
+  } finally {
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
+    button.disabled = false;
+  }
+});
+  
+/* AI BACKGROUND REMOVER — LOCAL BROWSER PROCESSING */
+let bgRemovalPipeline = null;
+
+$("bgRemoveButton").addEventListener("click", async () => {
+  const file = $("bgRemoveFile").files[0];
+  if (!validateFile(file, "bgRemoveStatus")) return;
+
+  const button = $("bgRemoveButton");
+  button.disabled = true;
+
+  let imageUrl = null;
+
+  try {
+    status("bgRemoveStatus", "Loading AI model…");
+
+    if (!bgRemovalPipeline) {
+      const { pipeline, env } = await import(
+        "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2"
+      );
+
+      // Load the model and perform inference locally.
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+
+      bgRemovalPipeline = await pipeline(
+        "image-segmentation",
+        "studioludens/birefnet-lite-512",
+        {
+          device: "webgpu",
+          dtype: "fp16",
+          progress_callback: (progress) => {
+            if (progress.status === "progress") {
+              status(
+                "bgRemoveStatus",
+                "Downloading AI model: " +
+                  Math.round(progress.progress || 0) + "%"
+              );
+            }
+          }
+        }
+      );
+    }
+
+    status("bgRemoveStatus", "Removing background…");
+
+    imageUrl = URL.createObjectURL(file);
+
+    const results = await bgRemovalPipeline(imageUrl);
+
+    if (!results || !results.length || !results[0].mask) {
+      throw new Error("The AI model did not return a mask.");
+    }
+
+    const source = await imageFromFile(file);
+    const img = source.img;
+
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+
+    if (width * height > MAX_PIXELS) {
+      URL.revokeObjectURL(source.url);
+      throw new Error("Image is too large. Please use a smaller image.");
+    }
+
+    const mask = results[0].mask;
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = width;
+    maskCanvas.height = height;
+
+    const maskCtx = maskCanvas.getContext("2d", {
+      willReadFrequently: true
+    });
+
+    const maskImage = new Image();
+    const maskUrl = URL.createObjectURL(
+      await mask.toBlob()
+    );
+
+    try {
+      await new Promise((resolve, reject) => {
+        maskImage.onload = resolve;
+        maskImage.onerror = reject;
+        maskImage.src = maskUrl;
+      });
+
+      maskCtx.drawImage(maskImage, 0, 0, width, height);
+    } finally {
+      URL.revokeObjectURL(maskUrl);
+      URL.revokeObjectURL(source.url);
+    }
+
+    const originalCanvas = document.createElement("canvas");
+    originalCanvas.width = width;
+    originalCanvas.height = height;
+
+    const originalCtx = originalCanvas.getContext("2d", {
+      willReadFrequently: true
+    });
+
+    originalCtx.drawImage(img, 0, 0, width, height);
+
+    const originalPixels = originalCtx.getImageData(
+      0, 0, width, height
+    );
+
+    const maskPixels = maskCtx.getImageData(
+      0, 0, width, height
+    );
+
+    for (let i = 0; i < originalPixels.data.length; i += 4) {
+      originalPixels.data[i + 3] = maskPixels.data[i];
+    }
+
+    originalCtx.putImageData(originalPixels, 0, 0);
+
+    const outputBlob = await canvasBlob(
+      originalCanvas,
+      "image/png"
+    );
+
+    downloadBlob(
+      outputBlob,
+      safeBaseName(file.name) + "-no-background.png",
+      "bgRemoveDownload"
+    );
+
+    showPreview("bgRemovePreview", outputBlob);
+
+    status(
+      "bgRemoveStatus",
+      "Background removed successfully!",
+      "success"
+    );
+  } catch (error) {
+    console.error(error);
+    status(
+      "bgRemoveStatus",
+      "Background removal failed: " +
         (error.message || "Please try another image."),
       "error"
     );
