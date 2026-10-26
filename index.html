@@ -1247,17 +1247,19 @@ maskCtx.drawImage(rawMaskCanvas, 0, 0, width, height);
 
     showPreview("bgRemovePreview", outputBlob);
 
+    
     status(
       "bgRemoveStatus",
       "Background removed successfully!",
       "success"
     );
   } catch (error) {
-    console.error(error);
+    console.error("Background removal error:", error);
+
     status(
       "bgRemoveStatus",
-      "Background removal failed: " +
-        (error.message || "Please try another image."),
+      "Error: " + String(error) +
+        (error.cause ? " | Cause: " + String(error.cause) : ""),
       "error"
     );
   } finally {
