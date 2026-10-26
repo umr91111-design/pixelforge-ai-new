@@ -975,45 +975,75 @@ $("resizeButton").addEventListener("click", async () => {
   });
 })();
 
-/* IMAGE TO SVG: VTRACER BACKEND */
+/* IMAGE TO SVG: RUN VTRACER IN THE BROWSER */
 $("traceButton").addEventListener("click", async () => {
   const file = $("traceFile").files[0];
   if (!validateFile(file, "traceStatus")) return;
 
   const button = $("traceButton");
   button.disabled = true;
+  let imageUrl;
 
   try {
-    status("traceStatus", "Uploading image for vector tracing…");
+    status("traceStatus", "Loading image…");
 
-    const form = new FormData();
-    form.append("image", file);
-    form.append("mode", $("traceMode").value);
+    const loaded = await imageFromFile(file);
+    const img = loaded.img;
+    imageUrl = loaded.url;
 
-    const response = await fetch(API_BASE + "/api/trace", {
-      method: "POST",
-      body: form
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+
+    if (width * height > MAX_PIXELS) {
+      throw new Error("Image is too large. Please use a smaller image.");
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d", {
+      willReadFrequently: true
     });
 
-    if (!response.ok) {
-      const message = await response.text();
-      throw new Error(
-        message || "The tracing server returned an error."
-      );
+    if (!ctx) {
+      throw new Error("Could not prepare the image for tracing.");
     }
 
-    const contentType = response.headers.get("content-type") || "";
-    let svgText;
+    ctx.drawImage(img, 0, 0);
 
-    if (contentType.includes("application/json")) {
-      const data = await response.json();
-      svgText = data.svg || data.result || data.data;
-    } else {
-      svgText = await response.text();
-    }
+    const imageData = ctx.getImageData(0, 0, width, height);
+
+    status("traceStatus", "Loading browser-based vector tracer…");
+
+    const { VTrace } = await import(
+      "https://esm.sh/@buzz-dee/vtrace@2.0.0-0"
+    );
+
+    status("traceStatus", "Tracing image into SVG…");
+
+    const options = $("traceMode").value === "bw"
+      ? {
+          clustering: "bw",
+          adaptive: true,
+          mode: "spline",
+          hierarchical: "cutout",
+          turdSize: 2
+        }
+      : {
+          clustering: "color-cluster",
+          hierarchical: "stacked",
+          mode: "spline",
+          maxColors: 16,
+          turdSize: 2,
+          optimize: 1
+        };
+
+    const tracer = new VTrace(imageData, options);
+    const svgText = tracer.getSVG();
 
     if (typeof svgText !== "string" || !svgText.includes("<svg")) {
-      throw new Error("The server did not return a valid SVG response.");
+      throw new Error("The tracer did not produce a valid SVG.");
     }
 
     const blob = new Blob([svgText], {
@@ -1031,14 +1061,20 @@ $("traceButton").addEventListener("click", async () => {
       new Blob([svgText], { type: "image/svg+xml" })
     );
 
-    status("traceStatus", "Vector SVG created successfully.", "success");
+    status(
+      "traceStatus",
+      "SVG created successfully in your browser.",
+      "success"
+    );
   } catch (error) {
     status(
       "traceStatus",
-      "Conversion failed: " + (error.message || "Check your backend."),
+      "Conversion failed: " +
+        (error.message || "Please try another image."),
       "error"
     );
   } finally {
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
     button.disabled = false;
   }
 });
