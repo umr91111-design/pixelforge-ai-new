@@ -367,8 +367,35 @@
       <div id="tracePreview" class="preview"><img alt="Vectorized image preview"></div>
     </article>
 
-    <!-- BACKGROUND REMOVER -->
-    <article class="card">
+    
+<!-- BACKGROUND REMOVER -->
+<article class="card">
+  <div class="icon">✂️</div>
+  <h2>Free Background Remover</h2>
+  <p>Remove image backgrounds in your browser. Download the result as a transparent PNG.</p>
+
+  <label for="bgRemoveFile">Choose an image</label>
+  <input
+    id="bgRemoveFile"
+    type="file"
+    accept="image/png,image/jpeg,image/webp"
+  >
+
+  <button id="bgRemoveButton" type="button">
+    Remove Background
+  </button>
+
+  <div id="bgRemoveStatus" class="status" role="status"></div>
+
+  <a id="bgRemoveDownload" class="download" hidden>
+    Download Transparent PNG
+  </a>
+
+  <div id="bgRemovePreview" class="preview">
+    <img alt="Image with background removed">
+  </div>
+</article>
+
       <div class="icon">✂️</div>
       <h2>Background Remover</h2>
       <p>Check whether the image-processing backend is online. Background removal is not implemented in this version.</p>
