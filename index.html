@@ -369,7 +369,7 @@
 
     
 <!-- BACKGROUND REMOVER -->
-<article class="card">
+<article class="card" id="backgroundRemoverCard">
   <div class="icon">✂️</div>
   <h2>Free Background Remover</h2>
   <p>Remove image backgrounds and download a transparent PNG.</p>
@@ -385,22 +385,18 @@
     Remove Background
   </button>
 
-  <div id="bgRemoveStatus" class="status" role="status">
-    Loading background-removal AI...
+  <div id="bgRemoveStatus" class="status" role="status" aria-live="polite">
+    Initializing background remover...
   </div>
 
-  <div id="bgRemovePreview" class="preview" hidden>
-    <img
-      id="bgRemovePreviewImage"
-      alt="Preview of image with background removed"
-    >
+  <div id="bgRemovePreview" class="preview">
+    <img id="bgRemovePreviewImage" alt="Transparent background removal preview">
   </div>
 
   <a id="bgRemoveDownload" class="download" hidden>
     Download Transparent PNG
   </a>
 </article>
-
 
       <div class="icon">✂️</div>
       <h2>Background Remover</h2>
@@ -1117,9 +1113,6 @@ $("healthButton").addEventListener("click", async () => {
   }
 });
 </script>
-  
-<script type="module">
-
 <script type="module">
 (() => {
   const fileInput = document.getElementById("bgRemoveFile");
@@ -1177,72 +1170,165 @@ $("healthButton").addEventListener("click", async () => {
     setStatus("Image selected: " + file.name);
   });
 
-  removeButton.addEventListener("click", async () => {
+<script type="module">
+(() => {
+  const fileInput = document.getElementById("bgRemoveFile");
+  const button = document.getElementById("bgRemoveButton");
+  const statusBox = document.getElementById("bgRemoveStatus");
+  const previewBox = document.getElementById("bgRemovePreview");
+  const previewImage = document.getElementById("bgRemovePreviewImage");
+  const downloadLink = document.getElementById("bgRemoveDownload");
+
+  if (
+    !fileInput ||
+    !button ||
+    !statusBox ||
+    !previewBox ||
+    !previewImage ||
+    !downloadLink
+  ) {
+    console.error("Background Remover elements were not found.");
+    return;
+  }
+
+  let removeBackground = null;
+  let resultUrl = null;
+  let busy = false;
+
+  function setStatus(message, type = "info") {
+    statusBox.textContent = message;
+    statusBox.className = "status " + type;
+  }
+
+  function clearResult() {
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      resultUrl = null;
+    }
+
+    previewImage.removeAttribute("src");
+    previewBox.style.display = "none";
+    downloadLink.hidden = true;
+    downloadLink.removeAttribute("href");
+  }
+
+  async function initialize() {
+    button.disabled = true;
+    setStatus("Loading AI library. Please wait...");
+
+    try {
+      const module = await import(
+        "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
+      );
+
+      if (typeof module.default !== "function") {
+        throw new Error("The AI library did not provide its removal function.");
+      }
+
+      removeBackground = module.default;
+      setStatus("Ready! Choose an image.", "success");
+    } catch (error) {
+      console.error("Background Remover initialization failed:", error);
+
+      setStatus(
+        "AI library failed to load. Check your internet connection and refresh. " +
+        (error.message || String(error)),
+        "error"
+      );
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  fileInput.addEventListener("change", () => {
+    clearResult();
+
+    if (fileInput.files.length) {
+      setStatus("Image selected. Tap Remove Background when ready.");
+    } else {
+      setStatus("Choose an image to begin.");
+    }
+  });
+
+  button.addEventListener("click", async () => {
+    if (busy) return;
+
     const file = fileInput.files[0];
 
-    if (isProcessing) return;
-
     if (!file) {
-      setStatus("Please choose an image first.");
+      setStatus("Please choose an image first.", "error");
+      return;
+    }
+
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setStatus("Please choose a PNG, JPG, or WebP image.", "error");
       return;
     }
 
     if (!removeBackground) {
       setStatus(
-        "AI library is not ready. Refresh the page and try again."
+        "The AI library is not ready. Refresh the page and check your connection.",
+        "error"
       );
       return;
     }
 
-    isProcessing = true;
-    removeButton.disabled = true;
-    downloadLink.hidden = true;
-    previewBox.hidden = true;
+    busy = true;
+    button.disabled = true;
+    clearResult();
 
     setStatus(
-      "Removing background... This may take a few minutes on your first try."
+      "Removing background. The first run may take several minutes..."
     );
 
     try {
-      const pngBlob = await removeBackground(file, {
-        model: "isnet_quint8"
+      const output = await removeBackground(file, {
+        model: "isnet_quint8",
+        output: {
+          format: "image/png",
+          quality: 1
+        },
+        progress: (key, current, total) => {
+          if (total > 0) {
+            setStatus(
+              "Loading AI model: " +
+              Math.round((current / total) * 100) + "%"
+            );
+          }
+        }
       });
 
-      if (!pngBlob || pngBlob.size === 0) {
-        throw new Error("The AI returned an empty image.");
+      if (!(output instanceof Blob) || output.size === 0) {
+        throw new Error("The AI returned an empty result.");
       }
 
-      if (resultUrl) {
-        URL.revokeObjectURL(resultUrl);
-      }
-
-      resultUrl = URL.createObjectURL(pngBlob);
+      resultUrl = URL.createObjectURL(output);
 
       previewImage.src = resultUrl;
-      previewBox.hidden = false;
-
-      const baseName =
-        file.name.replace(/\.[^.]+$/, "") || "image";
+      previewBox.style.display = "block";
 
       downloadLink.href = resultUrl;
-      downloadLink.download = baseName + "-transparent.png";
+      downloadLink.download =
+        (file.name.replace(/\.[^.]+$/, "") || "image") +
+        "-transparent.png";
       downloadLink.hidden = false;
 
-      setStatus("Success! Your transparent PNG is ready.");
+      setStatus("Background removed successfully!", "success");
     } catch (error) {
-      console.error("Background removal error:", error);
+      console.error("Background removal failed:", error);
 
       setStatus(
-        "Could not remove the background. Please try another image or refresh the page. Details: " +
-        (error.message || String(error))
+        "Background removal failed: " +
+        (error.message || String(error)),
+        "error"
       );
     } finally {
-      isProcessing = false;
-      removeButton.disabled = false;
+      busy = false;
+      button.disabled = false;
     }
   });
 
-  loadLibrary();
+  initialize();
 })();
 </script>
 </body>
