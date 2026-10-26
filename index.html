@@ -1126,7 +1126,7 @@ $("bgRemoveButton").addEventListener("click", async () => {
         "studioludens/birefnet-lite-512",
       {
         device: "wasm",
-        dtype: "fp16",
+        dtype: "fp32",
         progress_callback: (progress) => {
             if (progress.status === "progress") {
               status(
