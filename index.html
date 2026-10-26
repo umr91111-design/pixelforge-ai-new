@@ -1074,37 +1074,6 @@ $("traceButton").addEventListener("click", async () => {
   }
 });
 
-/* BACKEND HEALTH CHECK */
-$("healthButton").addEventListener("click", async () => {
-  const button = $("healthButton");
-  button.disabled = true;
-
-  status("healthStatus", "Checking backend…");
-
-  try {
-    const response = await fetch(API_BASE + "/api/health");
-
-    if (!response.ok) {
-      throw new Error("Server returned HTTP " + response.status);
-    }
-
-    const data = await response.json();
-
-    status(
-      "healthStatus",
-      "Backend is online. " + (data.message || ""),
-      "success"
-    );
-  } catch (error) {
-    status(
-      "healthStatus",
-      "Could not reach backend. It may be starting up. " + error.message,
-      "error"
-    );
-  } finally {
-    button.disabled = false;
-  }
-});
 </script>
 <script type="module">
 (() => {
