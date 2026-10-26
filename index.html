@@ -1121,28 +1121,32 @@ $("bgRemoveButton").addEventListener("click", async () => {
       env.allowLocalModels = false;
       env.useBrowserCache = true;
 
+      
       bgRemovalPipeline = await pipeline(
         "image-segmentation",
         "studioludens/birefnet-lite-512",
-      {
-        device: "wasm",
-        dtype: "fp16",
-        progress_callback: (progress) => {
-        console.log("AI model loading:", progress);
+        {
+          device: "wasm",
+          dtype: "fp16",
+          progress_callback: (progress) => {
+            console.log("AI model loading:", progress);
 
-  if (progress.status === "progress") {
-    status(
-      "bgRemoveStatus",
-      "Downloading AI model: " +
-        Math.round(progress.progress || 0) + "%"
-    );
-  } else {
-    status(
-      "bgRemoveStatus",
-      "Model loading: " + progress.status
-    );
-  }
-}
+            if (progress.status === "progress") {
+              status(
+                "bgRemoveStatus",
+                "Downloading AI model: " +
+                  Math.round(progress.progress || 0) + "%"
+              );
+            } else {
+              status(
+                "bgRemoveStatus",
+                "Model loading: " + progress.status
+              );
+            }
+          }
+        }
+      );
+    }
 
 
     status("bgRemoveStatus", "Removing background…");
