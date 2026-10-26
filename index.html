@@ -1100,7 +1100,6 @@ $("traceButton").addEventListener("click", async () => {
   
 /* AI BACKGROUND REMOVER — LOCAL BROWSER PROCESSING */
 let bgRemovalPipeline = null;
-
 $("bgRemoveButton").addEventListener("click", async () => {
   const file = $("bgRemoveFile").files[0];
   if (!validateFile(file, "bgRemoveStatus")) return;
