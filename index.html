@@ -1243,6 +1243,75 @@ $("healthButton").addEventListener("click", async () => {
     }
   });
 
+
+<script type="module">
+(() => {
+  const fileInput = document.getElementById("bgRemoveFile");
+  const button = document.getElementById("bgRemoveButton");
+  const statusBox = document.getElementById("bgRemoveStatus");
+  const previewBox = document.getElementById("bgRemovePreview");
+  const previewImage = document.getElementById("bgRemovePreviewImage");
+  const downloadLink = document.getElementById("bgRemoveDownload");
+
+  if (!fileInput || !button || !statusBox ||
+      !previewBox || !previewImage || !downloadLink) {
+    console.error("Background Remover elements are missing.");
+    return;
+  }
+
+  let removeBackground = null;
+  let resultUrl = null;
+  let busy = false;
+
+  function setStatus(message, type = "info") {
+    statusBox.textContent = message;
+    statusBox.className = "status " + type;
+  }
+
+  function clearResult() {
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    resultUrl = null;
+    previewImage.removeAttribute("src");
+    previewBox.style.display = "none";
+    downloadLink.hidden = true;
+    downloadLink.removeAttribute("href");
+  }
+
+  async function initialize() {
+    button.disabled = true;
+    setStatus("Loading AI library. Please wait...");
+
+    try {
+      const library = await import(
+        "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
+      );
+
+      if (typeof library.default !== "function") {
+        throw new Error("AI removal function was not found.");
+      }
+
+      removeBackground = library.default;
+      setStatus("Ready! Choose an image.", "success");
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        "Could not load the AI library. Check your internet connection and refresh.",
+        "error"
+      );
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  fileInput.addEventListener("change", () => {
+    clearResult();
+    setStatus(
+      fileInput.files.length
+        ? "Image selected. Tap Remove Background when ready."
+        : "Choose an image to begin."
+    );
+  });
+
   button.addEventListener("click", async () => {
     if (busy) return;
 
@@ -1254,25 +1323,24 @@ $("healthButton").addEventListener("click", async () => {
     }
 
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setStatus("Please choose a PNG, JPG, or WebP image.", "error");
+      setStatus("Choose a PNG, JPG, or WebP image.", "error");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setStatus("Image is too large. Maximum size is 5 MB.", "error");
       return;
     }
 
     if (!removeBackground) {
-      setStatus(
-        "The AI library is not ready. Refresh the page and check your connection.",
-        "error"
-      );
+      setStatus("AI library is not ready. Refresh and try again.", "error");
       return;
     }
 
     busy = true;
     button.disabled = true;
     clearResult();
-
-    setStatus(
-      "Removing background. The first run may take several minutes..."
-    );
+    setStatus("Removing background. The first run may take several minutes...");
 
     try {
       const output = await removeBackground(file, {
@@ -1284,19 +1352,17 @@ $("healthButton").addEventListener("click", async () => {
         progress: (key, current, total) => {
           if (total > 0) {
             setStatus(
-              "Loading AI model: " +
-              Math.round((current / total) * 100) + "%"
+              "Processing: " + Math.round(current / total * 100) + "%"
             );
           }
         }
       });
 
-      if (!(output instanceof Blob) || output.size === 0) {
+      if (!(output instanceof Blob) || !output.size) {
         throw new Error("The AI returned an empty result.");
       }
 
       resultUrl = URL.createObjectURL(output);
-
       previewImage.src = resultUrl;
       previewBox.style.display = "block";
 
@@ -1308,11 +1374,9 @@ $("healthButton").addEventListener("click", async () => {
 
       setStatus("Background removed successfully!", "success");
     } catch (error) {
-      console.error("Background removal failed:", error);
-
+      console.error(error);
       setStatus(
-        "Background removal failed: " +
-        (error.message || String(error)),
+        "Background removal failed: " + (error.message || String(error)),
         "error"
       );
     } finally {
