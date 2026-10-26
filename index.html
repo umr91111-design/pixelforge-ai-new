@@ -367,37 +367,6 @@
       <div id="tracePreview" class="preview"><img alt="Vectorized image preview"></div>
     </article>
 
-    
-<!-- BACKGROUND REMOVER -->
-<article class="card" id="backgroundRemoverCard">
-  <div class="icon">✂️</div>
-  <h2>Free Background Remover</h2>
-  <p>Remove image backgrounds and download a transparent PNG.</p>
-
-  <label for="bgRemoveFile">Choose an image</label>
-  <input
-    id="bgRemoveFile"
-    type="file"
-    accept="image/png,image/jpeg,image/webp"
-  >
-
-  <button id="bgRemoveButton" type="button">
-    Remove Background
-  </button>
-
-  <div id="bgRemoveStatus" class="status" role="status" aria-live="polite">
-    Initializing background remover...
-  </div>
-
-  <div id="bgRemovePreview" class="preview">
-    <img id="bgRemovePreviewImage" alt="Transparent background removal preview">
-  </div>
-
-  <a id="bgRemoveDownload" class="download" hidden>
-    Download Transparent PNG
-  </a>
-</article>
-
     <!-- UPSCALER -->
     <article class="card">
       <div class="icon">✨</div>
@@ -1155,66 +1124,7 @@ $("traceButton").addEventListener("click", async () => {
 
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
       setStatus("Choose a PNG, JPG, or WebP image.", "error");
-      return;
-    }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setStatus("Image is too large. Maximum size is 5 MB.", "error");
-      return;
-    }
-
-    if (!removeBackground) {
-      setStatus("AI library is not ready. Refresh and try again.", "error");
-      return;
-    }
-
-    busy = true;
-    button.disabled = true;
-    clearResult();
-    setStatus("Removing background. The first run may take several minutes...");
-
-    try {
-      const output = await removeBackground(file, {
-        model: "isnet_quint8",
-        output: {
-          format: "image/png",
-          quality: 1
-        },
-        progress: (key, current, total) => {
-          if (total > 0) {
-            setStatus(
-              "Processing: " + Math.round(current / total * 100) + "%"
-            );
-          }
-        }
-      });
-
-      if (!(output instanceof Blob) || !output.size) {
-        throw new Error("The AI returned an empty result.");
-      }
-
-      resultUrl = URL.createObjectURL(output);
-      previewImage.src = resultUrl;
-      previewBox.style.display = "block";
-
-      downloadLink.href = resultUrl;
-      downloadLink.download =
-        (file.name.replace(/\.[^.]+$/, "") || "image") +
-        "-transparent.png";
-      downloadLink.hidden = false;
-
-      setStatus("Background removed successfully!", "success");
-    } catch (error) {
-      console.error(error);
-      setStatus(
-        "Background removal failed: " + (error.message || String(error)),
-        "error"
-      );
-    } finally {
-      busy = false;
-      button.disabled = false;
-    }
-  });
 
   initialize();
 })();
