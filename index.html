@@ -1111,5 +1111,61 @@ $("healthButton").addEventListener("click", async () => {
   }
 });
 </script>
+  
+<script type="module">
+  import removeBackground from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm";
+
+  const fileInput = document.getElementById("bgRemoveFile");
+  const removeButton = document.getElementById("bgRemoveButton");
+  const resultStatus = document.getElementById("bgRemoveStatus");
+  const downloadLink = document.getElementById("bgRemoveDownload");
+  const preview = document.querySelector("#bgRemovePreview img");
+
+  let resultUrl = null;
+
+  removeButton.addEventListener("click", async () => {
+    const file = fileInput.files[0];
+
+    if (!file) {
+      resultStatus.textContent = "Please choose an image first.";
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      resultStatus.textContent = "Please select a valid image.";
+      return;
+    }
+
+    removeButton.disabled = true;
+    downloadLink.hidden = true;
+    resultStatus.textContent =
+      "Loading AI model and removing background. Please wait...";
+
+    try {
+      const pngBlob = await removeBackground(file, {
+        model: "isnet_quint8"
+      });
+
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = URL.createObjectURL(pngBlob);
+
+      preview.src = resultUrl;
+      downloadLink.href = resultUrl;
+      downloadLink.download =
+        (file.name.replace(/\.[^.]+$/, "") || "image") +
+        "-transparent.png";
+
+      downloadLink.hidden = false;
+      resultStatus.textContent =
+        "Background removed successfully! Download your transparent PNG.";
+    } catch (error) {
+      console.error("Background removal failed:", error);
+      resultStatus.textContent =
+        "Could not remove the background. Check your internet connection and try a smaller image.";
+    } finally {
+      removeButton.disabled = false;
+    }
+  });
+</script>
 </body>
 </html>
