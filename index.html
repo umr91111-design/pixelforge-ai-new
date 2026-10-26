@@ -1112,16 +1112,37 @@ $("healthButton").addEventListener("click", async () => {
 });
 </script>
   
-<script type="module">
-  import removeBackground from "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm";
 
+<script type="module">
   const fileInput = document.getElementById("bgRemoveFile");
   const removeButton = document.getElementById("bgRemoveButton");
   const resultStatus = document.getElementById("bgRemoveStatus");
   const downloadLink = document.getElementById("bgRemoveDownload");
   const preview = document.querySelector("#bgRemovePreview img");
 
+  let removeBackground;
   let resultUrl = null;
+
+  // Load the library and report any loading errors.
+  try {
+    resultStatus.textContent = "Loading AI library...";
+
+    const library = await import(
+      "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
+    );
+
+    removeBackground = library.default;
+
+    if (typeof removeBackground !== "function") {
+      throw new Error("The AI library did not load correctly.");
+    }
+
+    resultStatus.textContent = "Ready! Choose an image.";
+  } catch (error) {
+    console.error(error);
+    resultStatus.textContent =
+      "Library error: " + (error.message || String(error));
+  }
 
   removeButton.addEventListener("click", async () => {
     const file = fileInput.files[0];
@@ -1131,15 +1152,16 @@ $("healthButton").addEventListener("click", async () => {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      resultStatus.textContent = "Please select a valid image.";
+    if (!removeBackground) {
+      resultStatus.textContent =
+        "AI library is not loaded. Refresh the page and try again.";
       return;
     }
 
     removeButton.disabled = true;
     downloadLink.hidden = true;
     resultStatus.textContent =
-      "Loading AI model and removing background. Please wait...";
+      "Processing image. Please wait...";
 
     try {
       const pngBlob = await removeBackground(file, {
@@ -1154,16 +1176,20 @@ $("healthButton").addEventListener("click", async () => {
       downloadLink.download =
         (file.name.replace(/\.[^.]+$/, "") || "image") +
         "-transparent.png";
-
       downloadLink.hidden = false;
+
       resultStatus.textContent =
-        "Background removed successfully! Download your transparent PNG.";
+        "Success! Your transparent PNG is ready.";
     } catch (error) {
-      console.error("Background removal failed:", error);
+      console.error(error);
       resultStatus.textContent =
-        "Could not remove the background. Check your internet connection and try a smaller image.";
+        "Processing error: " + (error.message || String(error));
     } finally {
       removeButton.disabled = false;
+    }
+  });
+</script>
+
     }
   });
 </script>
