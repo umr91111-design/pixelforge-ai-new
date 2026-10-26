@@ -1128,17 +1128,22 @@ $("bgRemoveButton").addEventListener("click", async () => {
         device: "wasm",
         dtype: "fp16",
         progress_callback: (progress) => {
-            if (progress.status === "progress") {
-              status(
-                "bgRemoveStatus",
-                "Downloading AI model: " +
-                  Math.round(progress.progress || 0) + "%"
-              );
-            }
-          }
-        }
-      );
-    }
+        console.log("AI model loading:", progress);
+
+  if (progress.status === "progress") {
+    status(
+      "bgRemoveStatus",
+      "Downloading AI model: " +
+        Math.round(progress.progress || 0) + "%"
+    );
+  } else {
+    status(
+      "bgRemoveStatus",
+      "Model loading: " + progress.status
+    );
+  }
+}
+
 
     status("bgRemoveStatus", "Removing background…");
 
