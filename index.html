@@ -372,7 +372,7 @@
 <article class="card">
   <div class="icon">✂️</div>
   <h2>Free Background Remover</h2>
-  <p>Remove image backgrounds in your browser. Download the result as a transparent PNG.</p>
+  <p>Remove image backgrounds and download a transparent PNG.</p>
 
   <label for="bgRemoveFile">Choose an image</label>
   <input
@@ -385,16 +385,22 @@
     Remove Background
   </button>
 
-  <div id="bgRemoveStatus" class="status" role="status"></div>
+  <div id="bgRemoveStatus" class="status" role="status">
+    Loading background-removal AI...
+  </div>
+
+  <div id="bgRemovePreview" class="preview" hidden>
+    <img
+      id="bgRemovePreviewImage"
+      alt="Preview of image with background removed"
+    >
+  </div>
 
   <a id="bgRemoveDownload" class="download" hidden>
     Download Transparent PNG
   </a>
-
-  <div id="bgRemovePreview" class="preview">
-    <img alt="Image with background removed">
-  </div>
 </article>
+
 
       <div class="icon">✂️</div>
       <h2>Background Remover</h2>
@@ -1112,82 +1118,132 @@ $("healthButton").addEventListener("click", async () => {
 });
 </script>
   
+<script type="module">
 
 <script type="module">
+(() => {
   const fileInput = document.getElementById("bgRemoveFile");
   const removeButton = document.getElementById("bgRemoveButton");
   const resultStatus = document.getElementById("bgRemoveStatus");
   const downloadLink = document.getElementById("bgRemoveDownload");
-  const preview = document.querySelector("#bgRemovePreview img");
+  const previewBox = document.getElementById("bgRemovePreview");
+  const previewImage = document.getElementById("bgRemovePreviewImage");
 
-  let removeBackground;
+  let removeBackground = null;
   let resultUrl = null;
+  let isProcessing = false;
 
-  // Load the library and report any loading errors.
-  try {
-    resultStatus.textContent = "Loading AI library...";
+  function setStatus(message) {
+    resultStatus.textContent = message;
+  }
 
-    const library = await import(
-      "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
-    );
+  async function loadLibrary() {
+    try {
+      setStatus("Loading AI library. Please wait...");
 
-    removeBackground = library.default;
+      const library = await import(
+        "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
+      );
 
-    if (typeof removeBackground !== "function") {
-      throw new Error("The AI library did not load correctly.");
+      removeBackground = library.default;
+
+      if (typeof removeBackground !== "function") {
+        throw new Error("Background-removal function was not found.");
+      }
+
+      setStatus("Ready! Choose an image.");
+    } catch (error) {
+      console.error("Background remover loading error:", error);
+      setStatus(
+        "Could not load the AI library. Check your internet connection, then refresh the page."
+      );
+    }
+  }
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+
+    if (!file) return;
+
+    if (resultUrl) {
+      URL.revokeObjectURL(resultUrl);
+      resultUrl = null;
     }
 
-    resultStatus.textContent = "Ready! Choose an image.";
-  } catch (error) {
-    console.error(error);
-    resultStatus.textContent =
-      "Library error: " + (error.message || String(error));
-  }
+    previewImage.removeAttribute("src");
+    previewBox.hidden = true;
+    downloadLink.hidden = true;
+
+    setStatus("Image selected: " + file.name);
+  });
 
   removeButton.addEventListener("click", async () => {
     const file = fileInput.files[0];
 
+    if (isProcessing) return;
+
     if (!file) {
-      resultStatus.textContent = "Please choose an image first.";
+      setStatus("Please choose an image first.");
       return;
     }
 
     if (!removeBackground) {
-      resultStatus.textContent =
-        "AI library is not loaded. Refresh the page and try again.";
+      setStatus(
+        "AI library is not ready. Refresh the page and try again."
+      );
       return;
     }
 
+    isProcessing = true;
     removeButton.disabled = true;
     downloadLink.hidden = true;
-    resultStatus.textContent =
-      "Processing image. Please wait...";
+    previewBox.hidden = true;
+
+    setStatus(
+      "Removing background... This may take a few minutes on your first try."
+    );
 
     try {
       const pngBlob = await removeBackground(file, {
         model: "isnet_quint8"
       });
 
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      if (!pngBlob || pngBlob.size === 0) {
+        throw new Error("The AI returned an empty image.");
+      }
+
+      if (resultUrl) {
+        URL.revokeObjectURL(resultUrl);
+      }
+
       resultUrl = URL.createObjectURL(pngBlob);
 
-      preview.src = resultUrl;
+      previewImage.src = resultUrl;
+      previewBox.hidden = false;
+
+      const baseName =
+        file.name.replace(/\.[^.]+$/, "") || "image";
+
       downloadLink.href = resultUrl;
-      downloadLink.download =
-        (file.name.replace(/\.[^.]+$/, "") || "image") +
-        "-transparent.png";
+      downloadLink.download = baseName + "-transparent.png";
       downloadLink.hidden = false;
 
-      resultStatus.textContent =
-        "Success! Your transparent PNG is ready.";
+      setStatus("Success! Your transparent PNG is ready.");
     } catch (error) {
-      console.error(error);
-      resultStatus.textContent =
-        "Processing error: " + (error.message || String(error));
+      console.error("Background removal error:", error);
+
+      setStatus(
+        "Could not remove the background. Please try another image or refresh the page. Details: " +
+        (error.message || String(error))
+      );
     } finally {
+      isProcessing = false;
       removeButton.disabled = false;
     }
   });
+
+  loadLibrary();
+})();
 </script>
 </body>
 </html>
