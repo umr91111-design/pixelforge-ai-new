@@ -1124,10 +1124,10 @@ $("bgRemoveButton").addEventListener("click", async () => {
       bgRemovalPipeline = await pipeline(
         "image-segmentation",
         "studioludens/birefnet-lite-512",
-        {
-          device: "webgpu",
-          dtype: "fp16",
-          progress_callback: (progress) => {
+      {
+        device: "wasm",
+        dtype: "fp32",
+        progress_callback: (progress) => {
             if (progress.status === "progress") {
               status(
                 "bgRemoveStatus",
@@ -1151,42 +1151,64 @@ $("bgRemoveButton").addEventListener("click", async () => {
     }
 
     const source = await imageFromFile(file);
+
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
+    imageUrl = source.url;
     const img = source.img;
 
     const width = img.naturalWidth;
     const height = img.naturalHeight;
 
     if (width * height > MAX_PIXELS) {
-      URL.revokeObjectURL(source.url);
-      throw new Error("Image is too large. Please use a smaller image.");
+  throw new Error("Image is too large. Please use a smaller image.");
     }
+  
+const mask = results[0].mask;
 
-    const mask = results[0].mask;
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = width;
-    maskCanvas.height = height;
+if (!mask?.data || !mask.width || !mask.height || !mask.channels) {
+  throw new Error("The AI mask has no usable pixel data.");
+}
 
-    const maskCtx = maskCanvas.getContext("2d", {
-      willReadFrequently: true
-    });
+const rawMaskCanvas = document.createElement("canvas");
+rawMaskCanvas.width = mask.width;
+rawMaskCanvas.height = mask.height;
 
-    const maskImage = new Image();
-    const maskUrl = URL.createObjectURL(
-      await mask.toBlob()
-    );
+const rawMaskCtx = rawMaskCanvas.getContext("2d");
+if (!rawMaskCtx) {
+  throw new Error("Could not create the mask canvas.");
+}
 
-    try {
-      await new Promise((resolve, reject) => {
-        maskImage.onload = resolve;
-        maskImage.onerror = reject;
-        maskImage.src = maskUrl;
-      });
+const maskImageData = rawMaskCtx.createImageData(
+  mask.width,
+  mask.height
+);
 
-      maskCtx.drawImage(maskImage, 0, 0, width, height);
-    } finally {
-      URL.revokeObjectURL(maskUrl);
-      URL.revokeObjectURL(source.url);
-    }
+for (let p = 0; p < mask.width * mask.height; p++) {
+  const value = mask.data[p * mask.channels];
+  const i = p * 4;
+
+  maskImageData.data[i] = value;
+  maskImageData.data[i + 1] = value;
+  maskImageData.data[i + 2] = value;
+  maskImageData.data[i + 3] = 255;
+}
+
+rawMaskCtx.putImageData(maskImageData, 0, 0);
+
+const maskCanvas = document.createElement("canvas");
+maskCanvas.width = width;
+maskCanvas.height = height;
+
+const maskCtx = maskCanvas.getContext("2d", {
+  willReadFrequently: true
+});
+
+if (!maskCtx) {
+  throw new Error("Could not create the resized mask canvas.");
+}
+
+maskCtx.drawImage(rawMaskCanvas, 0, 0, width, height);
+
 
     const originalCanvas = document.createElement("canvas");
     originalCanvas.width = width;
