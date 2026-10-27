@@ -1189,6 +1189,7 @@ $("upscaleButton").addEventListener("click", async () => {
     );
   } catch (error) {
     console.error("AI upscaler error:", error);
+    console.error("Detailed error:", error.stack);
 
     status(
       "upscaleStatus",
