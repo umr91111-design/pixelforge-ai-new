@@ -1092,6 +1092,7 @@ $("upscaleButton").addEventListener("click", async () => {
       const { pipeline } = await import(
         "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2"
       );
+      console.log("Transformers.js library loaded");
 
      upscalerPipeline = await pipeline(
   "image-to-image",
