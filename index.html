@@ -1036,7 +1036,9 @@ async function addPngDpiMetadata(blob, dpi) {
         dx, dy, drawW, drawH
       );
 
-      const png = await canvasBlob(output, "image/png");
+      const rawPng = await canvasBlob(output, "image/png");
+      const dpi = Number($("svgPngDpi").value);
+      const png = await addPngDpiMetadata(rawPng, dpi);
 
       downloadBlob(
         png,
