@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://umr91111-design.github.io/pixelforge-ai-new/sitemap.xml
