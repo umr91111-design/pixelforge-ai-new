@@ -401,9 +401,9 @@
   </article>
   </section>
 
-  <div class="note">
-    <strong>Privacy:</strong> Image conversion, resizing, and vector tracing run in your browser. Your selected images are not uploaded to the PixelForge backend.
-  </div>
+   <div class="note">
+    <strong>Privacy:</strong> Image conversion, resizing, and SVG-to-PNG conversion run in your browser. Image to SVG sends your selected image to the PixelForge backend for vectorization. Avoid uploading sensitive or confidential images.
+</div>
 </main>
 
 <footer>
@@ -998,106 +998,76 @@ $("resizeButton").addEventListener("click", async () => {
   });
 })();
 
-/* IMAGE TO SVG: RUN VTRACER IN THE BROWSER */
+
+/* IMAGE TO SVG: USE THE RENDER VTRACER BACKEND */
 $("traceButton").addEventListener("click", async () => {
   const file = $("traceFile").files[0];
   if (!validateFile(file, "traceStatus")) return;
 
   const button = $("traceButton");
   button.disabled = true;
-  let imageUrl;
 
   try {
-    status("traceStatus", "Loading image…");
+    status("traceStatus", "Connecting to the vectorizer…");
 
-    const loaded = await imageFromFile(file);
-    const img = loaded.img;
-    imageUrl = loaded.url;
-
-    const width = img.naturalWidth;
-    const height = img.naturalHeight;
-
-    if (width * height > MAX_PIXELS) {
-      throw new Error("Image is too large. Please use a smaller image.");
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext("2d", {
-      willReadFrequently: true
-    });
-
-    if (!ctx) {
-      throw new Error("Could not prepare the image for tracing.");
-    }
-
-    ctx.drawImage(img, 0, 0);
-
-    const imageData = ctx.getImageData(0, 0, width, height);
-
-    status("traceStatus", "Loading browser-based vector tracer…");
-
-    const { VTrace } = await import(
-      "https://esm.sh/@buzz-dee/vtrace@2.0.0-0"
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append(
+      "mode",
+      $("traceMode").value === "bw" ? "bw" : "color"
     );
 
-    status("traceStatus", "Tracing image into SVG…");
+    status("traceStatus", "Sending image to VTracer…");
 
-    const options = $("traceMode").value === "bw"
-      ? {
-          clustering: "bw",
-          adaptive: true,
-          mode: "spline",
-          hierarchical: "cutout",
-          turdSize: 2
-        }
-      : {
-          clustering: "color-cluster",
-          hierarchical: "stacked",
-          mode: "spline",
-          maxColors: 16,
-          turdSize: 2,
-          optimize: 1
-        };
+    const response = await fetch(
+      "https://pixelforge-api.onrender.com/api/trace",
+      {
+        method: "POST",
+        body: formData
+      }
+    );
 
-    const tracer = new VTrace(imageData, options);
-    const svgText = tracer.getSVG();
+    if (!response.ok) {
+      let message = "Conversion failed. Please try another image.";
 
-    if (typeof svgText !== "string" || !svgText.includes("<svg")) {
-      throw new Error("The tracer did not produce a valid SVG.");
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) message = errorData.detail;
+      } catch (_) {}
+
+      throw new Error(message);
     }
 
-    const blob = new Blob([svgText], {
-      type: "image/svg+xml;charset=utf-8"
-    });
+    const svgBlob = await response.blob();
+
+    if (
+      !svgBlob.size ||
+      !(svgBlob.type.includes("image/svg+xml"))
+    ) {
+      throw new Error("The server did not return a valid SVG file.");
+    }
 
     downloadBlob(
-      blob,
+      svgBlob,
       safeBaseName(file.name) + ".svg",
       "traceDownload"
     );
 
-    showPreview(
-      "tracePreview",
-      new Blob([svgText], { type: "image/svg+xml" })
-    );
+    showPreview("tracePreview", svgBlob);
 
     status(
       "traceStatus",
-      "SVG created successfully in your browser.",
+      "SVG created successfully using the Render backend.",
       "success"
     );
   } catch (error) {
     status(
       "traceStatus",
       "Conversion failed: " +
-        (error.message || "Please try another image."),
+        (error.message || "Please try again."),
       "error"
     );
   } finally {
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
     button.disabled = false;
   }
 });
