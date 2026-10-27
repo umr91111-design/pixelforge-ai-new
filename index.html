@@ -162,6 +162,14 @@
 
     button:hover, .download:hover { filter: brightness(1.1); }
     button:disabled { opacity: .5; cursor: not-allowed; }
+    button:focus-visible, .download:focus-visible,
+    input:focus-visible, select:focus-visible {
+      outline: 3px solid var(--accent2);
+      outline-offset: 3px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; }
+    }
 
     .download {
       background: #155e45;
@@ -442,8 +450,15 @@ function imageFromFile(file) {
 function canvasBlob(canvas, type) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
-      if (blob) resolve(blob);
-      else reject(new Error("Could not create the output image."));
+      if (!blob) {
+        reject(new Error("Could not create the output image."));
+        return;
+      }
+      if (blob.type !== type) {
+        reject(new Error("This browser cannot export that format. Please choose PNG or JPEG."));
+        return;
+      }
+      resolve(blob);
     }, type, 0.92);
   });
 }
@@ -476,6 +491,31 @@ function showPreview(previewId, blob) {
   wrap.style.display = "block";
 }
 
+function clearToolOutput(downloadId, previewId, statusId) {
+  const link = $(downloadId);
+  if (link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+  delete link.dataset.url;
+  link.removeAttribute("href");
+  link.hidden = true;
+
+  const preview = $(previewId);
+  const img = preview.querySelector("img");
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  delete img.dataset.url;
+  img.removeAttribute("src");
+  preview.style.display = "none";
+
+  if (statusId) status(statusId, "");
+}
+
+// Remove old results when a different source file is selected.
+$("convertFile").addEventListener("change", () =>
+  clearToolOutput("convertDownload", "convertPreview", "convertStatus"));
+$("resizeFile").addEventListener("change", () =>
+  clearToolOutput("resizeDownload", "resizePreview", "resizeStatus"));
+$("traceFile").addEventListener("change", () =>
+  clearToolOutput("traceDownload", "tracePreview", "traceStatus"));
+
 function safeBaseName(filename) {
   return filename.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "-") || "image";
 }
@@ -507,6 +547,7 @@ $("convertButton").addEventListener("click", async () => {
     canvas.height = img.naturalHeight;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not create the image canvas.");
 
     if (type === "image/jpeg") {
       ctx.fillStyle = "#ffffff";
@@ -603,6 +644,9 @@ $("resizeButton").addEventListener("click", async () => {
     const result = await imageFromFile(file);
     const img = result.img;
     url = result.url;
+    if (img.naturalWidth * img.naturalHeight > MAX_PIXELS) {
+      throw new Error("Source image is too large to process safely.");
+    }
 
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -610,6 +654,7 @@ $("resizeButton").addEventListener("click", async () => {
 
     const ctx = canvas.getContext("2d");
     const type = $("resizeFormat").value;
+    if (!ctx) throw new Error("Could not create the resize canvas.");
 
     if (type === "image/jpeg") {
       ctx.fillStyle = "#ffffff";
@@ -821,7 +866,8 @@ let loadedSvgFile = null;
   keepRatio.addEventListener("change", updateHeight);
 
   fileInput.addEventListener("change", async () => {
-   loadedSvgText = "";
+    clearToolOutput("svgToPngDownload", "svgToPngPreview", statusId);
+    loadedSvgText = "";
    loadedSvgFile = null;
     
     const file = fileInput.files[0];
