@@ -1093,10 +1093,11 @@ $("upscaleButton").addEventListener("click", async () => {
         "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2"
       );
 
-      upscalerPipeline = await pipeline(
+     upscalerPipeline = await pipeline(
   "image-to-image",
-  "Xenova/swin2SR-classical-sr-x2-64"
-   );
+  "Xenova/swin2SR-classical-sr-x2-64",
+  { dtype: "q4" }
+  );
       
     }
 
