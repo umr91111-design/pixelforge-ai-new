@@ -339,6 +339,15 @@
         <input id="svgPngKeepRatio" type="checkbox" checked>
         Keep aspect ratio
       </label>
+      
+<label for="svgPngDpi">PNG print resolution (DPI)</label>
+<select id="svgPngDpi">
+  <option value="72">72 DPI — Screen</option>
+  <option value="150">150 DPI — Draft print</option>
+  <option value="300" selected>300 DPI — High-quality print</option>
+  <option value="600">600 DPI — Extra-detailed print</option>
+</select>
+
 
       <button id="svgToPngButton">Convert SVG to PNG</button>
       <div id="svgToPngStatus" class="status" role="status"></div>
@@ -628,6 +637,94 @@ $("resizeButton").addEventListener("click", async () => {
     button.disabled = false;
   }
 });
+
+  
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^
+        ((crc & 1) ? 0xedb88320 : 0);
+    }
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function addPngDpiMetadata(blob, dpi) {
+  if (![72, 150, 300, 600].includes(dpi)) {
+    throw new Error("Please choose a valid DPI.");
+  }
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+
+  for (let i = 0; i < 8; i++) {
+    if (bytes[i] !== signature[i]) {
+      throw new Error("Invalid PNG file.");
+    }
+  }
+
+  const view = new DataView(
+    bytes.buffer,
+    bytes.byteOffset,
+    bytes.byteLength
+  );
+
+  const chunks = [bytes.slice(0, 8)];
+  let offset = 8;
+  let inserted = false;
+
+  while (offset + 12 <= bytes.length) {
+    const length = view.getUint32(offset);
+    const end = offset + 12 + length;
+
+    if (end > bytes.length) {
+      throw new Error("Invalid PNG data.");
+    }
+
+    const type = String.fromCharCode(
+      ...bytes.subarray(offset + 4, offset + 8)
+    );
+
+    if (type === "IDAT" && !inserted) {
+      const chunk = new Uint8Array(21);
+      const chunkView = new DataView(chunk.buffer);
+      const pixelsPerMeter = Math.round(dpi / 0.0254);
+
+      chunkView.setUint32(0, 9);
+      chunk.set([112, 72, 89, 115], 4);
+      chunkView.setUint32(8, pixelsPerMeter);
+      chunkView.setUint32(12, pixelsPerMeter);
+      chunk[16] = 1;
+
+      chunkView.setUint32(
+        17,
+        pngCrc32(chunk.subarray(4, 17))
+      );
+
+      chunks.push(chunk);
+      inserted = true;
+    }
+
+    if (type !== "pHYs") {
+      chunks.push(bytes.slice(offset, end));
+    }
+
+    offset = end;
+
+    if (type === "IEND") break;
+  }
+
+  if (!inserted) {
+    throw new Error("Could not set PNG DPI metadata.");
+  }
+
+  return new Blob(chunks, { type: "image/png" });
+}
 
 /* SVG TO PNG: HIGH-RESOLUTION OUTPUT AND TRANSPARENT MARGIN TRIMMING */
 (() => {
