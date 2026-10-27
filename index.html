@@ -739,6 +739,16 @@ async function addPngDpiMetadata(blob, dpi) {
 let loadedSvgText = "";
 let loadedSvgFile = null;
 
+  function readSvgFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read the selected SVG. Please select it again."));
+      reader.onabort = () => reject(new Error("SVG file reading was cancelled. Please select it again."));
+      reader.readAsText(file);
+    });
+  }
+
   function parseSvg(text) {
     const doc = new DOMParser().parseFromString(text, "image/svg+xml");
     const svg = doc.documentElement;
@@ -820,7 +830,7 @@ let loadedSvgFile = null;
     if (!validateFile(file, statusId)) return;
 
     try {
-      const text = await file.text();
+      const text = await readSvgFile(file);
       const svg = parseSvg(text);
 
 loadedSvgText = text;
@@ -851,8 +861,8 @@ loadedSvgFile = file;
       status(statusId, "Rendering SVG and trimming transparent margins…");
 
       const text = (loadedSvgFile === file && loadedSvgText)
-  ? loadedSvgText
-  : await file.text();
+        ? loadedSvgText
+        : await readSvgFile(file);
 
 const svg = parseSvg(text);
       
