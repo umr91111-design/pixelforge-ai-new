@@ -736,6 +736,8 @@ async function addPngDpiMetadata(blob, dpi) {
   const statusId = "svgToPngStatus";
 
   let originalRatio = 1;
+let loadedSvgText = "";
+let loadedSvgFile = null;
 
   function parseSvg(text) {
     const doc = new DOMParser().parseFromString(text, "image/svg+xml");
@@ -809,6 +811,9 @@ async function addPngDpiMetadata(blob, dpi) {
   keepRatio.addEventListener("change", updateHeight);
 
   fileInput.addEventListener("change", async () => {
+   loadedSvgText = "";
+   loadedSvgFile = null;
+    
     const file = fileInput.files[0];
     if (!file) return;
 
@@ -817,6 +822,9 @@ async function addPngDpiMetadata(blob, dpi) {
     try {
       const text = await file.text();
       const svg = parseSvg(text);
+
+loadedSvgText = text;
+loadedSvgFile = file;
 
       originalRatio = getRatio(svg);
       updateHeight();
@@ -842,9 +850,12 @@ async function addPngDpiMetadata(blob, dpi) {
     try {
       status(statusId, "Rendering SVG and trimming transparent margins…");
 
-      const text = await file.text();
-      const svg = parseSvg(text);
+      const text = (loadedSvgFile === file && loadedSvgText)
+  ? loadedSvgText
+  : await file.text();
 
+const svg = parseSvg(text);
+      
       const requestedWidth = Number(widthInput.value);
       const requestedHeight = Number(heightInput.value);
 
