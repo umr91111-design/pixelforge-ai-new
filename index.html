@@ -244,7 +244,7 @@
       <div id="tracePreview" class="preview"><img alt="Vectorized image preview"></div>
     </article>
 
-    
+    </div> <!-- Closes tool-grid -->
   </section>
 
    <div class="note">
@@ -1048,7 +1048,7 @@ $("traceButton").addEventListener("click", async () => {
       throw new Error("The server returned an empty or unexpectedly large SVG file.");
     }
     const svgText = await svgBlob.slice(0, 2048).text();
-    if (!/<svg[\\s>]/i.test(svgText)) {
+    if (!/<svg[\s>]/i.test(svgText)) {
       throw new Error("The server response was not a valid SVG. Please try again.");
     }
     const verifiedSvg = new Blob([svgBlob], { type: "image/svg+xml" });
