@@ -187,7 +187,7 @@
             id="svgPngWidth"
             type="number"
             min="1000"
-            max="8000"
+            max="10000"
             step="100"
             value="2000"
           >
@@ -198,7 +198,7 @@
             id="svgPngHeight"
             type="number"
             min="1000"
-            max="8000"
+            max="10000"
             step="100"
             value="2000"
           >
@@ -264,8 +264,8 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 /* SVG-TO-PNG LIMITS ONLY */
 const SVG_MIN_DIMENSION = 1000;
-const SVG_MAX_DIMENSION = 8000;
-const SVG_MAX_PIXELS = 40000000;
+const SVG_MAX_DIMENSION = 10000;
+const SVG_MAX_PIXELS = 100000000;
 
 const $ = id => document.getElementById(id);
 
@@ -749,7 +749,7 @@ loadedSvgFile = file;
 
       status(
         statusId,
-        "SVG loaded. Choose dimensions between 1000 and 8000 pixels.",
+        "SVG loaded. Choose each output dimension between 1000 and 10000 pixels.",
         "success"
       );
     } catch (error) {
@@ -786,7 +786,7 @@ const svg = parseSvg(text);
         requestedHeight > SVG_MAX_DIMENSION
       ) {
         throw new Error(
-          "Width and height must each be between 1000 and 8000 pixels."
+          "Width and height must each be between 1000 and 10000 pixels."
         );
       }
 
@@ -802,7 +802,7 @@ const svg = parseSvg(text);
           height > SVG_MAX_DIMENSION
         ) {
           throw new Error(
-            "Keeping the aspect ratio would put the height outside 1000–8000 pixels. Adjust the width or turn off Keep aspect ratio."
+            "Keeping the aspect ratio would put the height outside 1000–10000 pixels. Adjust the width or turn off Keep aspect ratio."
           );
         }
 
@@ -811,7 +811,7 @@ const svg = parseSvg(text);
 
       if (width * height > SVG_MAX_PIXELS) {
         throw new Error(
-          "Output exceeds the 40-million-pixel safety limit. Reduce the dimensions."
+          "Output exceeds the 100-million-pixel limit (10000 × 10000). Reduce the dimensions."
         );
       }
 
@@ -1048,7 +1048,7 @@ $("traceButton").addEventListener("click", async () => {
       throw new Error("The server returned an empty or unexpectedly large SVG file.");
     }
     const svgText = await svgBlob.slice(0, 2048).text();
-    if (!/<svg[\s>]/i.test(svgText)) {
+    if (!/<svg[\\s>]/i.test(svgText)) {
       throw new Error("The server response was not a valid SVG. Please try again.");
     }
     const verifiedSvg = new Blob([svgBlob], { type: "image/svg+xml" });
