@@ -244,6 +244,8 @@
       <div id="tracePreview" class="preview"><img alt="Vectorized image preview"></div>
     </article>
 
+    </div> <!-- Closes tool-grid -->
+        
     <!-- SHAPE DETECTOR -->
     <article class="card">
       <div class="card-top">
@@ -268,12 +270,10 @@
 
       <div id="shapeResults" class="status" aria-live="polite"></div>
     </article>
-
-    </div> <!-- Closes tool-grid -->
   </section>
 
    <div class="note">
-    <strong>Privacy:</strong> Image conversion, resizing, and SVG-to-PNG conversion run in your browser. Image-to-SVG and Shape Detector send selected images to the PixelForge backend for processing. Avoid uploading sensitive or confidential images.
+    <strong>Privacy:</strong> Image conversion, resizing, and SVG-to-PNG conversion run in your browser. Image to SVG sends your selected image to the PixelForge backend for vectorization. Avoid uploading sensitive or confidential images.
 </div>
 </main>
 
@@ -290,7 +290,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 /* SVG-TO-PNG LIMITS ONLY */
 const SVG_MIN_DIMENSION = 1000;
 const SVG_MAX_DIMENSION = 10000;
-const SVG_MAX_PIXELS = 100000000;
+const SVG_MAX_PIXELS = 40000000;
 
 const $ = id => document.getElementById(id);
 
@@ -1102,68 +1102,105 @@ $("traceButton").addEventListener("click", async () => {
     button.disabled = false;
   }
 });
-  /* SHAPE DETECTOR */
+/* SHAPE DETECTOR */
 const shapeButton = $("shapeButton");
+const shapeFileInput = $("shapeFile");
+const shapeResults = $("shapeResults");
 
-if (shapeButton) {
+// Remove previous detection results as soon as another image is selected.
+if (shapeFileInput) {
+  shapeFileInput.addEventListener("change", () => {
+    if (shapeResults) shapeResults.replaceChildren();
+    status("shapeStatus", shapeFileInput.files.length ? "Image selected. Ready to detect shapes." : "");
+  });
+}
+
+if (shapeButton && shapeFileInput && shapeResults) {
   shapeButton.addEventListener("click", async () => {
-    const file = $("shapeFile").files[0];
-
+    const file = shapeFileInput.files[0];
     if (!validateFile(file, "shapeStatus")) return;
 
     const formData = new FormData();
     formData.append("image", file);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     shapeButton.disabled = true;
-    status("shapeStatus", "Detecting shapes...");
-
-    const results = $("shapeResults");
-    results.textContent = "";
+    shapeResults.replaceChildren();
+    status("shapeStatus", "Connecting to the shape detector…");
 
     try {
-      const response = await fetch(
-        "https://pixelforge-api.onrender.com/api/detect-shapes",
-        {
-          method: "POST",
-          body: formData
-        }
-      );
+      status("shapeStatus", "Detecting shapes. The server may take a moment to wake up…");
 
-      const data = await response.json();
+      let response;
+      try {
+        response = await fetch(
+          "https://pixelforge-api.onrender.com/api/detect-shapes",
+          {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+          }
+        );
+      } catch (networkError) {
+        if (networkError.name === "AbortError") {
+          throw new Error("Shape detection timed out. Please try again.");
+        }
+        throw new Error("Could not reach the PixelForge server. It may be starting up; wait a minute and try again.");
+      }
+
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(response.ok
+          ? "The server returned an unexpected response. Please try again."
+          : `Server error (${response.status}). Please try again in a moment.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || "Shape detection failed.");
+        const detail = typeof data.detail === "string" ? data.detail : "Shape detection failed.";
+        throw new Error(detail);
       }
+
+      if (!Array.isArray(data.shapes)) {
+        throw new Error("The server response did not contain valid shape results.");
+      }
+
+      const count = Number.isFinite(Number(data.shapes_found))
+        ? Number(data.shapes_found)
+        : data.shapes.length;
 
       status(
         "shapeStatus",
-        `Detection complete: ${data.shapes_found} shape(s) found.`,
+        `Detection complete: ${count} shape(s) found.`,
         "success"
       );
 
-      if (!data.shapes || data.shapes.length === 0) {
-        results.textContent = "No shapes were detected.";
+      if (data.shapes.length === 0) {
+        shapeResults.textContent = "No shapes were detected. Try an image with clear, well-separated shapes.";
         return;
       }
 
       data.shapes.forEach((item, index) => {
         const line = document.createElement("p");
-        const box = item.bounding_box || {};
-
-        line.textContent =
-          `${index + 1}. ${item.shape} — ` +
-          `${box.width ?? "?"} × ${box.height ?? "?"} px`;
-
-        results.appendChild(line);
+        const box = item && item.bounding_box ? item.bounding_box : {};
+        const shapeName = item && typeof item.shape === "string" ? item.shape : "Unknown shape";
+        const width = Number.isFinite(Number(box.width)) ? Math.round(Number(box.width)) : "?";
+        const height = Number.isFinite(Number(box.height)) ? Math.round(Number(box.height)) : "?";
+        line.textContent = `${index + 1}. ${shapeName} — ${width} × ${height} px`;
+        shapeResults.appendChild(line);
       });
 
     } catch (error) {
       status(
         "shapeStatus",
-        error.message || "Could not connect to the server.",
+        error.message || "Could not detect shapes. Please try again.",
         "error"
       );
     } finally {
+      clearTimeout(timeoutId);
       shapeButton.disabled = false;
     }
   });
@@ -1171,4 +1208,3 @@ if (shapeButton) {
 </script>
 </body>
 </html>
- 
